@@ -52,7 +52,11 @@ const Stadium = {
       this.scene=new THREE.Scene(); this.scene.background=new THREE.Color(0x87ceeb);
       this.scene.fog=new THREE.Fog(0x87ceeb,70,140);
       this.camera=new THREE.PerspectiveCamera(50,W/H,0.1,300);
-      this.camera.position.set(0,27,38); this.camera.lookAt(0,0,-3);
+      this.FIELD_POS=new THREE.Vector3(0,27,38); this.FIELD_LOOK=new THREE.Vector3(0,0,-3);
+      this.VISION_POS=new THREE.Vector3(0,14.5,-4); this.VISION_LOOK=new THREE.Vector3(0,14.5,-33.3);
+      this.camera.position.copy(this.FIELD_POS);
+      this.lookCur=this.FIELD_LOOK.clone(); this.camera.lookAt(this.lookCur);
+      this.camAnim=null;
       this.renderer=new THREE.WebGLRenderer({antialias:true});
       this.renderer.setSize(W,H); this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));
       wrap.appendChild(this.renderer.domElement);
@@ -114,6 +118,20 @@ const Stadium = {
     if(sub) g.fillText(sub,512,330);
     if(this.visionTex) this.visionTex.needsUpdate=true;
   },
+  animateCam(toPos,toLook,dur){
+    if(!this.ok) return;
+    this.camAnim={fromPos:this.camera.position.clone(), fromLook:this.lookCur.clone(), toPos:toPos.clone(), toLook:toLook.clone(), start:Date.now(), dur:dur||1200};
+  },
+  focusVision(){ this.animateCam(this.VISION_POS,this.VISION_LOOK,1300); },
+  focusField(){ this.animateCam(this.FIELD_POS,this.FIELD_LOOK,1100); },
+  allArrived(pids){
+    if(!this.ok) return true;
+    return pids.every(pid=>{
+      const grp=this.people.get(pid), t=this.targets.get(pid);
+      if(!grp||!t) return true;
+      return Math.hypot(t.x-grp.position.x, t.z-grp.position.z) < 0.35;
+    });
+  },
   startPos(i){ const col=i%10, rowi=Math.floor(i/10); return {x:(col-4.5)*2.4, z:13-rowi*2.6}; },
   zonePos(pid,zone){ let h=0; const s=String(pid); for(const ch of s) h=(h*31+ch.charCodeAt(0))%997; const a=(h%360)*Math.PI/180, r=2+(h%55)/10; const cx=zone===1?-16:16; return {x:cx+Math.cos(a)*r, z:-7+Math.sin(a)*r*0.8}; },
   syncParticipants(list){
@@ -146,10 +164,18 @@ const Stadium = {
   fall(pid){ if(!this.ok) return; this.falling.add(pid); const grp=this.people.get(pid); if(grp) grp.userData.fallStart=Date.now(); },
   tick(){
     if(!this.ok) return; const now=Date.now();
+    if(this.camAnim){
+      const k=Math.min(1,(now-this.camAnim.start)/this.camAnim.dur);
+      const e=1-Math.pow(1-k,3); // easeOutCubic
+      this.camera.position.lerpVectors(this.camAnim.fromPos,this.camAnim.toPos,e);
+      this.lookCur.lerpVectors(this.camAnim.fromLook,this.camAnim.toLook,e);
+      this.camera.lookAt(this.lookCur);
+      if(k>=1) this.camAnim=null;
+    }
     this.people.forEach((grp,pid)=>{
       const t=this.targets.get(pid); if(!t) return;
       const dx=t.x-grp.position.x, dz=t.z-grp.position.z, dist=Math.hypot(dx,dz);
-      if(dist>0.08){ const sp=0.16; grp.position.x+=dx/dist*Math.min(sp,dist); grp.position.z+=dz/dist*Math.min(sp,dist);
+      if(dist>0.08){ const sp=0.30; grp.position.x+=dx/dist*Math.min(sp,dist); grp.position.z+=dz/dist*Math.min(sp,dist);
         grp.rotation.y=Math.atan2(dx,dz);
         const bob=Math.abs(Math.sin(now/90+grp.userData.phase))*0.14; grp.position.y=bob;
         grp.userData.legL.rotation.x=Math.sin(now/90+grp.userData.phase)*0.7; grp.userData.legR.rotation.x=-Math.sin(now/90+grp.userData.phase)*0.7;
@@ -185,8 +211,21 @@ function startTimer(seconds, onTimeout){
     if(left<=0){ stopTimer(); onTimeout&&onTimeout(); } },100);
 }
 function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
+function showAnswerOverlay(answer){
+  const ov=$("#answer-overlay"); if(!ov) return;
+  const sym=$("#answer-symbol");
+  sym.textContent=answer===1?"○":"×"; sym.className=answer===1?"maru":"batsu"; sym.id="answer-symbol";
+  $("#answer-caption").textContent="正解は "+(answer===1?"○":"×")+" ！";
+  ov.classList.remove("hidden");
+  Stadium.focusVision();
+}
+function hideAnswerOverlay(){ const ov=$("#answer-overlay"); if(ov) ov.classList.add("hidden"); Stadium.focusField(); }
 function showQuestion(idx,total,q){
+  hideAnswerOverlay();
   Stadium.setVision("第 "+(idx+1)+" 問","シンキングタイム "+THINK_SECONDS+"秒","#111827","#ffffff");
+  // スキップボタンは参加者が自分1人のときだけ表示
+  const solo = game && game.participants.length===1;
+  $("#skip-btn").classList.toggle("hidden", !solo);
   $("#q-num").textContent=idx+1; $("#q-total").textContent=total; $("#question-text").textContent=q;
   $("#choice-area").classList.remove("hidden"); $("#reveal-area").classList.add("hidden");
   $("#btn-maru").classList.remove("selected"); $("#btn-batsu").classList.remove("selected");
@@ -210,13 +249,37 @@ function beginGameScreen(){
 }
 function hostNextQuestion(){
   if(game.idx>=game.questions.length) return hostFinish(true,"全問勝ち残り！");
-  game.picks={}; game.myPick=null; game.resolving=false;
+  game.picks={}; game.myPick=null; game.resolving=false; game.finalized=false;
+  (game.cpuTimers||[]).forEach(clearTimeout); game.cpuTimers=[];
+  clearInterval(game.thinkPoll);
   const cur=game.questions[game.idx];
+  const qidx=game.idx;
   showQuestion(game.idx, game.questions.length, cur.q);
   netBroadcast({t:"question", idx:game.idx, total:game.questions.length, q:cur.q});
-  startTimer(THINK_SECONDS, ()=>{ // 時間切れ：未回答の人間はランダム
+  // CPUはシンキングタイム中に思い思いのタイミングで回答し、その瞬間に移動する（早い者順）
+  game.participants.forEach(part=>{
+    if(!part.alive||part.kind!=="cpu") return;
+    const delay=1200+Math.random()*24000; // 1.2〜25.2秒のどこかで決断
+    const t=setTimeout(()=>{
+      if(!game||game.idx!==qidx||game.finalized||game.picks[part.pid]!==undefined) return;
+      const correct=Math.random()<part.skill;
+      const choice=correct?cur.a:(cur.a===1?2:1);
+      recordPick(part.pid, choice);
+      netBroadcast({t:"picks", picks:{[part.pid]:choice}});
+    }, delay);
+    game.cpuTimers.push(t);
+  });
+  // 全員が回答し、全員の移動が終わったら解答提示へ
+  game.thinkPoll=setInterval(()=>{
+    if(!game||game.idx!==qidx||game.finalized) return;
+    const alive=game.participants.filter(x=>x.alive);
+    if(alive.every(x=>game.picks[x.pid]!==undefined) && Stadium.allArrived(alive.map(x=>x.pid))){
+      finalizePicks("all-moved");
+    }
+  },200);
+  startTimer(THINK_SECONDS, ()=>{ // シンキングタイム終了
     if(game.myPick===null) recordPick("you", Math.random()<0.5?1:2, true);
-    resolveIfReady(true);
+    finalizePicks("timeout");
   });
 }
 function recordPick(pid, choice, timedOut=false){
@@ -229,14 +292,34 @@ function aliveHumansAnswered(){
   return game.participants.filter(p=>p.alive&&(p.kind==="you"||p.kind==="remote")).every(p=>game.picks[p.pid]!==undefined);
 }
 function resolveIfReady(force=false){
-  if(game.resolving) return;
+  // リアルタイム方式では、回答が届くたびに移動だけ反映し、提示タイミングはポーリングとタイマーが決める
   if(!force && !aliveHumansAnswered()) { $("#wait-text").textContent="相手の回答を待っています…"; return; }
-  game.resolving=true; stopTimer();
-  // 未回答のリモートはランダム扱い
-  game.participants.forEach(p=>{ if(p.alive&&p.kind==="remote"&&game.picks[p.pid]===undefined) recordPick(p.pid, Math.random()<0.5?1:2, true); });
+  if(force) finalizePicks("timeout");
+}
+// 回答を確定し、全員の移動が終わるのを待ってから解答を提示する
+function finalizePicks(reason){
+  if(!game||game.finalized||game.resolving) return;
+  game.finalized=true; game.resolving=true; stopTimer();
+  clearInterval(game.thinkPoll); (game.cpuTimers||[]).forEach(clearTimeout);
   const cur=game.questions[game.idx];
-  game.participants.forEach(p=>{ if(p.alive&&p.kind==="cpu"){ const correct=Math.random()<p.skill; recordPick(p.pid, correct?cur.a:(cur.a===1?2:1)); } });
-  setTimeout(()=>applyReveal(), 1100); // 人が走って移動する演出を見せる
+  // まだ決めていない参加者はここで確定（人間・リモートはランダム、CPUは実力判定）
+  game.participants.forEach(part=>{
+    if(!part.alive||game.picks[part.pid]!==undefined) return;
+    let choice;
+    if(part.kind==="cpu"){ const correct=Math.random()<part.skill; choice=correct?cur.a:(cur.a===1?2:1); }
+    else choice=Math.random()<0.5?1:2;
+    recordPick(part.pid, choice);
+  });
+  netBroadcast({t:"picks", picks:game.picks});
+  if(reason==="skip"){ applyReveal(); return; }
+  // 移動完了待ち（シンキングタイム終了時は最長4秒の猶予、それ以外は全員到着まで）
+  const deadline=Date.now()+(reason==="timeout"?4000:30000);
+  $("#wait-text").textContent="全員の移動を待っています…";
+  const poll=setInterval(()=>{
+    const alive=game.participants.filter(x=>x.alive);
+    if(Stadium.allArrived(alive.map(x=>x.pid)) || Date.now()>deadline){ clearInterval(poll); applyReveal(); }
+  },150);
+  game.movePoll=poll;
 }
 function applyReveal(){
   const cur=game.questions[game.idx];
@@ -245,8 +328,11 @@ function applyReveal(){
   game.participants.forEach(p=>{ if(p.alive&&game.picks[p.pid]!==cur.a){ p.alive=false; Stadium.fall(p.pid); if(p.kind!=="you") deadNames.push(p.name); } });
   const youCorrect=game.picks["you"]===cur.a;
   if(youCorrect) game.survived++;
-  // 解答提示はオーロラビジョン（中央上部）で行う
+  // 解答提示はオーロラビジョン（中央上部）で行う：カメラが俯瞰からビジョンのアップへ移り、記号を大々的に表示
+  clearInterval(game.movePoll);
+  $("#skip-btn").classList.add("hidden");
   Stadium.setVision("正解は "+(cur.a===1?"○":"×")+" ！", youCorrect?"正解！勝ち残りです":"残念…", cur.a===1?"#1648a0":"#a01616", "#ffffff");
+  showAnswerOverlay(cur.a);
   $("#reveal-result").innerHTML=youCorrect?"🎉 <b>正解！勝ち残りです！</b>（オーロラビジョンで解答提示中）":"💥 <b>残念…不正解。ここで脱落です。</b>（オーロラビジョンで解答提示中）";
   const alive=game.participants.filter(p=>p.alive);
   $("#reveal-survivors").textContent="この問題で "+deadNames.length+" 人が脱落。勝ち残りは "+alive.length+" 人です。";
@@ -272,14 +358,20 @@ function onChoice(choice){
     $("#wait-text").textContent="回答を送りました。正解発表を待っています…";
     return;
   }
-  if(!game||game.myPick!==null||game.resolving) return;
+  if(!game||game.myPick!==null||game.resolving||game.finalized) return;
   recordPick("you", choice);
-  if(game.mode==="online"){ netBroadcast({t:"picks", picks:{you:choice}}); resolveIfReady(false); }
-  else resolveIfReady(true);
+  if(game.mode==="online") netBroadcast({t:"picks", picks:{you:choice}});
+  // 提示は「全員の移動完了」または「シンキングタイム終了」まで自動では進まない
 }
 // 遷移は自動で行うため、手動の「次の問題へ」ボタンは使わない
+$("#skip-btn").addEventListener("click",()=>{
+  if(!game||game.participants.length!==1||game.finalized) return; // 自分1人の場合に限る
+  if(game.myPick===null) recordPick("you", Math.random()<0.5?1:2, true);
+  finalizePicks("skip");
+});
 function hostFinish(won, reason=""){
-  stopTimer(); clearTimeout(revealTimer);
+  stopTimer(); clearTimeout(revealTimer); clearInterval(game.thinkPoll); (game.cpuTimers||[]).forEach(clearTimeout); clearInterval(game.movePoll);
+  const ov=$("#answer-overlay"); if(ov) ov.classList.add("hidden");
   Stadium.setVision(won?"🏆 優勝！":"ゲーム終了", won?"アメリカ行き決定！":"また挑戦してください","#111827","#facc15");
   const you=game.participants[0];
   showResult(won, reason, you.name, game.survived, game.idx+1, game.participants.filter(p=>p.alive).length, game.mode);
@@ -487,12 +579,14 @@ function onGuestMessage(msg){
     const mine=msg.picks&&msg.picks[guest.myPid]; const correct=mine===msg.answer;
     if(guest.participants.find(p=>p.pid===guest.myPid)) guest.alive=guest.participants.find(p=>p.pid===guest.myPid).alive;
     Stadium.setVision("正解は "+(msg.answer===1?"○":"×")+" ！", correct?"正解！勝ち残りです":"残念…", msg.answer===1?"#1648a0":"#a01616", "#ffffff");
+    showAnswerOverlay(msg.answer);
     $("#reveal-result").innerHTML=correct?"🎉 <b>正解！勝ち残りです！</b>（オーロラビジョンで解答提示中）":"💥 <b>残念…不正解。ここで脱落です。</b>（オーロラビジョンで解答提示中）";
     $("#reveal-survivors").textContent=msg.survivedNote||"";
     $("#choice-area").classList.add("hidden"); $("#reveal-area").classList.remove("hidden"); $("#next-btn").style.display="none";
     setHud(myName(), guest.alive); renderParticipants();
   }
   if(msg.t==="result"&&guest){
+    const ov=$("#answer-overlay"); if(ov) ov.classList.add("hidden");
     const won=msg.wonMap?!!msg.wonMap[guest.myPid]:false;
     showResult(won, msg.reason||"", myName(), msg.stats?msg.stats.survived:0, msg.stats?msg.stats.played:0, msg.stats?msg.stats.alive:0, "online");
     $("#next-btn").style.display="";

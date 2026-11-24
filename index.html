@@ -118,6 +118,13 @@
     <p class="choice-hint">← ○か×か、エリアを選べ！ →</p>
     <button id="btn-batsu" class="choice batsu">×<span>バツ</span></button>
   </div>
+  <button id="skip-btn" class="big-btn sub hidden" style="margin-top:10px">⏩ スキップ（解答提示へ）</button>
+
+  <div id="answer-overlay" class="hidden">
+    <div class="vision-label">AURORA VISION</div>
+    <div id="answer-symbol">○</div>
+    <div id="answer-caption">正解は ○ ！</div>
+  </div>
 
   <div id="reveal-area" class="reveal-area hidden">
     <p id="reveal-result"></p>
@@ -151,7 +158,7 @@
     <li>正解発表で間違えた人はその場で倒れて脱落。勝ち残り人数が減っていきます。</li>
     <li>大会モードではCPUも同時に答えます。最後の1人になるか、全問勝ち残れば優勝です。</li>
     <li>オンライン対戦は2通りあります。自動マッチングでは待っている相手と自動でつながり、部屋対戦ではホストの部屋コードで参加します。人数が足りない分はCPUが補います。</li>
-    <li>流れは自動です。出題のあとシンキングタイムは30秒（全員が答え終わると早めに締め切ります）。正解は野球場中央上部のオーロラビジョンに表示され、そのあと自動で次の問題に進みます。</li>
+    <li>流れは自動です。出題のあとシンキングタイムは30秒。答えた人から順にリアルタイムで移動し、全員の移動が終わるかシンキングタイムが終わると、カメラがオーロラビジョンのアップに移って正解の○×が大きく表示され、そのあと自動で次の問題に進みます。参加者が自分1人のときだけスキップボタンが使えます。</li>
     <li>オンライン対戦はブラウザ同士の直接通信で行い、チャット機能はありません。送られるのはゲーム進行に必要なデータだけです。</li>
   </ol>
   <button class="big-btn" data-goto="title">トップへ戻る</button>

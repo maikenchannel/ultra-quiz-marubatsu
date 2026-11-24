@@ -44,11 +44,18 @@
           <button id="automatch-btn" class="big-btn">🎯 ランダムマッチを開始</button>
           <p id="automatch-status" class="status"></p>
         </div>
+        <div id="match-screen" class="online-box hidden" style="text-align:center">
+          <h3>🎯 マッチング中</h3>
+          <p id="match-state" class="status">待機中…</p>
+          <p style="font-size:20px">現在のプレイヤー数：<b id="match-count">1</b> 人</p>
+          <p style="font-size:20px">強制スタートまで：<b id="match-countdown">90</b> 秒</p>
+          <p class="desc">カウントダウンが0になると、CPUを補って自動で始まります。</p>
+        </div>
         <div id="room-panel" class="hidden">
         <div class="online-box">
           <h3>部屋を作る（ホスト）</h3>
           <label class="check"><input type="checkbox" id="room-cpu-check" checked> CPUを入れる</label>
-          <label>CPUの数（最大999体） <input id="room-cpu-count" type="number" value="9" min="0" max="999" step="1"></label>
+          <label>CPUの数（最大99体） <input id="room-cpu-count" type="number" value="9" min="0" max="99" step="1"></label>
           <button id="create-room-btn" class="big-btn">部屋を作る</button>
           <div id="host-lobby" class="lobby hidden">
             <p>部屋コード：<b id="room-code" class="room-code">----</b></p>
@@ -102,9 +109,6 @@
   </div>
   <button id="skip-btn" class="big-btn sub hidden" style="margin-top:10px">⏩ スキップ（解答提示へ）</button>
 
-  <div id="answer-overlay" class="hidden">
-    <div id="answer-symbol">○</div>
-  </div>
 
   <div id="reveal-area" class="reveal-area hidden">
     <p id="reveal-result"></p>
@@ -137,7 +141,7 @@
     <li>問題が出たら、○ボタンか×ボタンを押します。あなたの選手が野球場のレフト側（○）／ライト側（×）へ走って移動します。</li>
     <li>正解発表で間違えた人はその場で倒れて脱落。勝ち残り人数が減っていきます。</li>
     <li>大会モードではCPUも同時に答えます。最後の1人になるか、全問勝ち残れば優勝です。</li>
-    <li>「シングル」は1人ですぐ開始。「オンライン」ではランダムマッチ（最大100人、人数選択なし）と部屋作成が選べます。部屋作成ではCPUの有無と数（最大999体）をホストが選べます。</li>
+    <li>「シングル」は1人ですぐ開始。「オンライン」ではランダムマッチ（最大100人、人数選択なし）と部屋作成が選べます。部屋作成ではCPUの有無と数（最大99体）をホストが選べます。</li>
     <li>流れは自動です。出題のあとシンキングタイムは30秒。答えた人から順にリアルタイムで移動し、全員の移動が終わるかシンキングタイムが終わると、カメラがオーロラビジョンにズームインして、記号1文字だけ（ ○ か × ）が大きく表示され、そのあと自動で次の問題に進みます。参加者が自分1人のときだけスキップボタンが使えます。</li>
     <li>オンライン対戦はブラウザ同士の直接通信で行い、チャット機能はありません。送られるのはゲーム進行に必要なデータだけです。</li>
   </ol>

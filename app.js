@@ -133,8 +133,8 @@ const Stadium = {
       return Math.hypot(t.x-grp.position.x, t.z-grp.position.z) < 0.35;
     });
   },
-  startPos(i){ const n=this.count||50; const cols=n<=60?10:(n<=240?16:30); const rows=Math.max(1,Math.ceil(n/cols)); const sx=Math.min(2.4,44/cols), sz=Math.min(2.6,44/rows); const col=i%cols, rowi=Math.floor(i/cols); return {x:(col-(cols-1)/2)*sx, z:13-rowi*sz}; },
-  zonePos(pid,zone){ let h=0; const s=String(pid); for(const ch of s) h=(h*31+ch.charCodeAt(0))%997; const a=(h%360)*Math.PI/180, r=2+(h%55)/10; const cx=zone===1?-16:16; return {x:cx+Math.cos(a)*r, z:-7+Math.sin(a)*r*0.8}; },
+  startPos(i){ const n=this.count||50; const cols=n<=60?10:14; const rows=Math.max(1,Math.ceil(n/cols)); const sx=Math.min(1.7,16.5/cols), sz=Math.min(1.9,13.5/rows); const col=i%cols, rowi=Math.floor(i/cols); return {x:(col-(cols-1)/2)*sx, z:17.5-rowi*sz}; }, // 初期位置は中央奥（○×エリアと重ならない帯）
+  zonePos(pid,zone){ let h=0; const s=String(pid); for(const ch of s) h=(h*31+ch.charCodeAt(0))%997; const a=(h%360)*Math.PI/180, r=1.5+(h%45)/10; const cx=zone===1?-16:16; return {x:cx+Math.cos(a)*r, z:-7+Math.sin(a)*r*0.8}; }, // エリアは左右に寄せ、初期位置の帯（|x|<=8.3, z>=4）と重ならない
   syncParticipants(list){
     if(!this.ok) return;
     this.count=list.length;
@@ -213,13 +213,7 @@ function startTimer(seconds, onTimeout){
     if(left<=0){ stopTimer(); onTimeout&&onTimeout(); } },100);
 }
 function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
-function showAnswerOverlay(answer){
-  const ov=$("#answer-overlay"); if(!ov) return;
-  const sym=$("#answer-symbol");
-  sym.textContent=answer===1?"○":"×"; sym.className=answer===1?"maru":"batsu"; sym.id="answer-symbol";
-  ov.classList.remove("hidden");
-}
-// ズームインしてから、オーロラビジョンに記号1文字だけを出す
+// ズームインしてから、オーロラビジョンの中に記号1文字だけを出す（全画面表示はしない）
 function revealOnVision(answer){
   Stadium.setVision("","", "#030712","#ffffff"); // ズーム中は無表示
   Stadium.focusVision();
@@ -227,10 +221,9 @@ function revealOnVision(answer){
     Stadium.setVision(answer===1?"○":"×", "", "#030712", answer===1?"#60a5fa":"#f87171");
     const vm=$("#vision-main"); if(vm){ vm.textContent=answer===1?"○":"×"; vm.style.fontSize="44px"; }
     const vs=$("#vision-sub"); if(vs) vs.textContent="";
-    showAnswerOverlay(answer);
   }, 1250);
 }
-function hideAnswerOverlay(){ const ov=$("#answer-overlay"); if(ov) ov.classList.add("hidden"); Stadium.focusField(); }
+function hideAnswerOverlay(){ Stadium.focusField(); }
 function showQuestion(idx,total,q){
   hideAnswerOverlay();
   const vm0=$("#vision-main"); if(vm0) vm0.style.fontSize="";
@@ -380,7 +373,7 @@ $("#skip-btn").addEventListener("click",()=>{
 });
 function hostFinish(won, reason=""){
   stopTimer(); clearTimeout(revealTimer); clearInterval(game.thinkPoll); (game.cpuTimers||[]).forEach(clearTimeout); clearInterval(game.movePoll);
-  const ov=$("#answer-overlay"); if(ov) ov.classList.add("hidden");
+
   Stadium.setVision(won?"🏆 優勝！":"ゲーム終了", won?"アメリカ行き決定！":"また挑戦してください","#111827","#facc15");
   const you=game.participants[0];
   showResult(won, reason, you.name, game.survived, game.idx+1, game.participants.filter(p=>p.alive).length, game.mode);
@@ -461,16 +454,18 @@ function broadcastLobby(){
   const players=lobbyPlayers();
   $("#lobby-members").textContent="現在の参加者："+players.map(p=>p.name).join("、")+"（"+players.length+"人）";
   if(net.matchmaking) $("#automatch-status").textContent="自動マッチ待機中… 現在 "+players.length+" 人が集まっています。";
-  netBroadcast({t:"lobby", players:players.map(p=>({pid:p.pid,name:p.name,kind:p.kind==="you"?"remote":p.kind}))});
+  netBroadcast({t:"lobby", players:players.map(p=>({pid:p.pid,name:p.name,kind:p.kind==="you"?"remote":p.kind})), match: net.matchmaking? {count:players.length, remain:matchRemainSec()} : null});
+  if(net.matchmaking) updateMatchScreen(players.length);
 }
 function netBroadcast(obj){ net.conns.forEach(c=>{ try{ c.open&&c.send(obj); }catch(e){} }); }
 
 function startOnlineGame(cpuCount){
+  hideMatchScreen();
   if(!allQuestions.length){ alert("問題データが読み込めていません。少し待ってからもう一度お試しください。"); return; }
   clearTimeout(matchCountdown); clearTimeout(matchWaitTimeout); matchCountdown=null;
   const participants=[{pid:"you", name:myName(), kind:"you", you:true, alive:true}];
   net.conns.forEach((conn,pid)=>participants.push({pid, name:conn._name||("ゲスト "+pid.slice(1)), kind:"remote", alive:true}));
-  let ci=0; const n=Math.max(0,Math.min(999, cpuCount|0)); while(ci<n) participants.push(makeCpu(ci++)); // 指定された数だけCPUを入れる
+  let ci=0; const n=Math.max(0,Math.min(999, cpuCount|0)); while(ci<n) participants.push(makeCpu(ci++)); // 指定された数だけCPUを入れる（ランダムマッチは合計100人まで）
   game={ mode:"online", participants, questions:shuffle(allQuestions), idx:0, survived:0, picks:{}, myPick:null, useTimer:true, resolving:false };
   net.started=true;
   netBroadcast({t:"start", players:participants.map(p=>({pid:p.pid,name:p.name,kind:p.kind,alive:true})), total:game.questions.length});
@@ -478,7 +473,7 @@ function startOnlineGame(cpuCount){
 }
 $("#start-online-btn").addEventListener("click",()=>{
   const useCpu=$("#room-cpu-check").checked;
-  const cnt=useCpu? Math.max(0, Math.min(999, parseInt($("#room-cpu-count").value,10)||0)) : 0;
+  const cnt=useCpu? Math.max(0, Math.min(99, parseInt($("#room-cpu-count").value,10)||0)) : 0;
   startOnlineGame(cnt);
 });
 
@@ -486,21 +481,43 @@ $("#start-online-btn").addEventListener("click",()=>{
 // 待機枠（スロット）を先着で確保した人が待機ホストになり、後から来た人はその枠へ自動で参加する。
 // 一覧を返すサーバーは置かず、枠の確保・参加は PeerJS Cloud の取り次ぎだけで行う（通信自体はブラウザ間直接）。
 const MATCH_SLOTS=[1,2,3,4,5].map(i=>PEER_PREFIX+"match-"+i);
+let matchUiTimer=null;
+function matchRemainSec(){ return net.matchDeadline? Math.max(0, Math.ceil((net.matchDeadline-Date.now())/1000)) : null; }
+function showMatchScreen(stateText){
+  $("#match-screen").classList.remove("hidden");
+  if(stateText) $("#match-state").textContent=stateText;
+  updateMatchScreen();
+}
+function hideMatchScreen(){ $("#match-screen").classList.add("hidden"); clearInterval(matchUiTimer); matchUiTimer=null; }
+function updateMatchScreen(count){
+  const c = count!==undefined? count : (net.isHost? 1+net.conns.size : ((guest&&guest.matchCount)||(guest&&guest.participants&&guest.participants.length)||1));
+  $("#match-count").textContent=c;
+  const r=matchRemainSec();
+  $("#match-countdown").textContent= r===null? "-" : r;
+}
+function startMatchUi(){
+  clearInterval(matchUiTimer);
+  matchUiTimer=setInterval(()=>{ updateMatchScreen(); if(net.isHost&&net.matchmaking&&!net.started) broadcastLobby(); },1000);
+  updateMatchScreen();
+}
 function scheduleMatchStart(){
   if(matchCountdown||net.started) return;
   clearTimeout(matchWaitTimeout);
-  let remain=12;
-  $("#automatch-status").textContent="対戦相手が見つかりました！ "+remain+" 秒後に自動で開始します（残りはCPUが補います）";
+  net.matchDeadline=Date.now()+12000; // 強制スタートまでのカウントダウン（12秒）
+  showMatchScreen("対戦相手が見つかりました！ まもなく自動で開始します");
+  $("#automatch-status").textContent="対戦相手が見つかりました！ 12秒後に自動で開始します（残りはCPUが補います）";
+  broadcastLobby();
   matchCountdown=setInterval(()=>{
-    remain--;
-    if(remain<=0){ clearInterval(matchCountdown); matchCountdown=null; startOnlineGame(Math.max(0, 100-(1+net.conns.size))); }
-    else $("#automatch-status").textContent="対戦相手が見つかりました！ "+remain+" 秒後に自動で開始します（残りはCPUが補います）";
-  },1000);
+    if(matchRemainSec()<=0){ clearInterval(matchCountdown); matchCountdown=null; startOnlineGame(Math.max(0, 100-(1+net.conns.size))); }
+  },500);
 }
 function becomeMatchHost(slotPeer){
   net.matchmaking=true;
   becomeHost(slotPeer, ()=>{
     $("#automatch-status").textContent="自動マッチ待機中… 相手が来るのを待っています。90秒たつとCPUを補って自動で開始します。";
+    net.matchDeadline=Date.now()+90000; // 強制スタートまでのカウントダウン（90秒）
+    showMatchScreen("対戦相手を待っています…");
+    startMatchUi(); broadcastLobby();
     clearTimeout(matchWaitTimeout);
     matchWaitTimeout=setTimeout(()=>{ startOnlineGame(Math.max(0, 100-(1+net.conns.size))); }, 90000);
   });
@@ -519,6 +536,7 @@ function tryJoinSlot(slotId, done){
     conn.on("data",msg=>{
       if(msg&&msg.t==="welcome"){ net.peer=peer; net.isHost=false; guest={ myPid:msg.pid, participants:[], idx:0, myPick:null, alive:true };
         $("#automatch-status").textContent="マッチしました！ まもなく自動で開始します。";
+        showMatchScreen("マッチしました！ 開始を待っています"); startMatchUi();
         finish(true); }
       else onGuestMessage(msg);
     });
@@ -573,8 +591,10 @@ $("#join-room-btn").addEventListener("click",()=>{
 function onGuestMessage(msg){
   if(!msg||typeof msg!=="object") return;
   if(msg.t==="welcome"){ guest={ myPid:msg.pid, participants:[], idx:0, myPick:null, alive:true }; }
-  if(msg.t==="lobby"&&guest){ /* ロビー表示は簡易 */ $("#guest-status").textContent="ロビー参加中："+msg.players.length+"人。開始をお待ちください。"; }
+  if(msg.t==="lobby"&&guest){ $("#guest-status").textContent="ロビー参加中："+msg.players.length+"人。開始をお待ちください。";
+    if(msg.match){ guest.matchCount=msg.match.count; guest.matchRemain=msg.match.remain; net.matchDeadline=Date.now()+(msg.match.remain||0)*1000; showMatchScreen("マッチしました！ 開始を待っています"); updateMatchScreen(msg.match.count); if(!matchUiTimer) startMatchUi(); } }
   if(msg.t==="start"){
+    hideMatchScreen();
     guest.participants=msg.players.map(p=>({...p, you:p.pid===guest.myPid, kind:p.pid===guest.myPid?"you":(p.kind==="cpu"?"cpu":"remote")}));
     guest.myPick=null; guest.alive=true;
     setHud(myName(),true); goto("game"); Stadium.init(); renderParticipants();
@@ -595,7 +615,7 @@ function onGuestMessage(msg){
     setHud(myName(), guest.alive); renderParticipants();
   }
   if(msg.t==="result"&&guest){
-    const ov=$("#answer-overlay"); if(ov) ov.classList.add("hidden");
+  
     const won=msg.wonMap?!!msg.wonMap[guest.myPid]:false;
     showResult(won, msg.reason||"", myName(), msg.stats?msg.stats.survived:0, msg.stats?msg.stats.played:0, msg.stats?msg.stats.alive:0, "online");
     $("#next-btn").style.display="";

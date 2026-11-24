@@ -84,8 +84,8 @@ const Stadium = {
     const mound=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.6,0.5,14),this.mat(0xc68b4e)); mound.position.set(0,0.25,7); this.scene.add(mound);
     [[0,17],[ -7,10],[0,3],[7,10]].forEach(([x,z])=>this.box(1.2,0.18,1.2,0xffffff,x,0.1,z)); // 塁
     // ○ゾーン（レフト）／×ゾーン（ライト）
-    const maruZone=new THREE.Mesh(new THREE.CircleGeometry(9,24),new THREE.MeshBasicMaterial({color:0x2563eb,transparent:true,opacity:0.4})); maruZone.rotation.x=-Math.PI/2; maruZone.position.set(-16,0.04,-7); this.scene.add(maruZone);
-    const batsuZone=new THREE.Mesh(new THREE.CircleGeometry(9,24),new THREE.MeshBasicMaterial({color:0xdc2626,transparent:true,opacity:0.4})); batsuZone.rotation.x=-Math.PI/2; batsuZone.position.set(16,0.04,-7); this.scene.add(batsuZone);
+    const maruZone=new THREE.Mesh(new THREE.CircleGeometry(7.5,24),new THREE.MeshBasicMaterial({color:0x2563eb,transparent:true,opacity:0.4})); maruZone.rotation.x=-Math.PI/2; maruZone.position.set(-16,0.04,-7); this.scene.add(maruZone);
+    const batsuZone=new THREE.Mesh(new THREE.CircleGeometry(7.5,24),new THREE.MeshBasicMaterial({color:0xdc2626,transparent:true,opacity:0.4})); batsuZone.rotation.x=-Math.PI/2; batsuZone.position.set(16,0.04,-7); this.scene.add(batsuZone);
     const maruSign=this.textPlane("○","#ffffff","#2563eb",7,7); maruSign.position.set(-16,5,-14); this.scene.add(maruSign);
     const batsuSign=this.textPlane("×","#ffffff","#dc2626",7,7); batsuSign.position.set(16,5,-14); this.scene.add(batsuSign);
     // 外野フェンス＋スタンド（段々のボックス）＋照明塔＋ファウルポール＋スコアボード
@@ -133,7 +133,7 @@ const Stadium = {
       return Math.hypot(t.x-grp.position.x, t.z-grp.position.z) < 0.35;
     });
   },
-  startPos(i){ const n=this.count||50; const cols=n<=60?10:14; const rows=Math.max(1,Math.ceil(n/cols)); const sx=Math.min(1.7,16.5/cols), sz=Math.min(1.9,13.5/rows); const col=i%cols, rowi=Math.floor(i/cols); return {x:(col-(cols-1)/2)*sx, z:17.5-rowi*sz}; }, // 初期位置は中央奥（○×エリアと重ならない帯）
+  startPos(i){ const n=this.count||50; const cols=n<=60?10:14; const rows=Math.max(1,Math.ceil(n/cols)); const sx=Math.min(1.7,16.5/cols), sz=Math.min(1.9,13/rows); const col=i%cols, rowi=Math.floor(i/cols); return {x:(col-(cols-1)/2)*sx, z:18-rowi*sz}; }, // 初期位置は中央奥（○×エリアと重ならない帯）
   zonePos(pid,zone){ let h=0; const s=String(pid); for(const ch of s) h=(h*31+ch.charCodeAt(0))%997; const a=(h%360)*Math.PI/180, r=1.5+(h%45)/10; const cx=zone===1?-16:16; return {x:cx+Math.cos(a)*r, z:-7+Math.sin(a)*r*0.8}; }, // エリアは左右に寄せ、初期位置の帯（|x|<=8.3, z>=4）と重ならない
   syncParticipants(list){
     if(!this.ok) return;
@@ -394,6 +394,7 @@ $("#single-btn").addEventListener("click", startLocalGame); // シングルは�
 $("#online-btn").addEventListener("click", ()=>{ $("#online-options").classList.toggle("hidden"); });
 $("#random-mode-btn").addEventListener("click", ()=>{ $("#random-panel").classList.remove("hidden"); $("#room-panel").classList.add("hidden"); });
 $("#room-mode-btn").addEventListener("click", ()=>{ $("#room-panel").classList.remove("hidden"); $("#random-panel").classList.add("hidden"); });
+$("#room-cpu-count").addEventListener("input", e=>{ let v=parseInt(e.target.value,10); if(!isNaN(v)){ if(v>99) e.target.value=99; if(v<0) e.target.value=0; } });
 
 // ---------- オンライン対戦（WebRTC / PeerJS Cloud は接続の取り次ぎのみ） ----------
 // 方針：このサイト自身は通信を中継・保存しない。ブラウザ同士が直接通信し、
@@ -546,6 +547,7 @@ function tryJoinSlot(slotId, done){
 $("#automatch-btn").addEventListener("click", async ()=>{
   if(!peerAvailable()){ alert("オンライン機能の読み込みに失敗しました。再読み込みしてください。"); return; }
   $("#automatch-status").textContent="マッチング中… 待機枠を探しています。";
+  net.matchDeadline=null; showMatchScreen("待機枠を探しています…"); startMatchUi();
   for(const slotId of MATCH_SLOTS){
     // まず待機枠の確保を試す（空いていれば自分が待機ホスト）
     const claimed=await new Promise(res=>{

@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>アメリカ横断ウルトラクイズ風 ○×勝ち残りクイズ</title>
 <meta name="description" content="○×勝ち残りクイズ。野球場風3Dフィールドで対戦。オンライン対戦対応。">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
 <header class="topbar">
-  <div class="logo-mini">★ ULTRA QUIZ ★</div>
+  <div class="logo-mini">ULTRA QUIZ</div>
   <nav>
     <button class="nav-btn" data-goto="title">トップ</button>
     <button class="nav-btn" data-goto="howto">遊び方</button>
@@ -21,7 +21,7 @@
 <!-- TITLE -->
 <section id="screen-title" class="screen active">
   <div class="hero">
-    <div class="stars">★ ★ ★ ★ ★ ★ ★</div>
+    <div class="stars">ULTRA QUIZ</div>
     <p class="hero-sub">AMERICA OUDAN STYLE</p>
     <h1><span class="red">アメリカ横断</span><br>ウルトラクイズ<span class="small">風</span></h1>
     <p class="hero-catch">○× 勝ち残りクイズ in ニューヨーク</p>
@@ -29,23 +29,23 @@
     <div class="setup-card">
       <label>あなたの名前（ニックネーム） <input id="player-name" type="text" value="挑戦者" maxlength="12"></label>
       <div class="mode-buttons">
-        <button id="single-btn" class="big-btn mode-btn">👤 シングル</button>
-        <button id="online-btn" class="big-btn mode-btn sub">🌐 オンライン</button>
+        <button id="single-btn" class="big-btn mode-btn">シングル</button>
+        <button id="online-btn" class="big-btn mode-btn sub">オンライン</button>
       </div>
       <p class="desc" style="text-align:center">シングルを押すと1人ですぐ始まります。オンラインではランダムマッチと部屋作成が選べます。</p>
       <div id="online-options" class="hidden">
         <div class="mode-buttons">
-          <button id="random-mode-btn" class="big-btn sub">🎯 ランダムマッチ</button>
-          <button id="room-mode-btn" class="big-btn sub">🏠 部屋作成／参加</button>
+          <button id="random-mode-btn" class="big-btn sub">ランダムマッチ</button>
+          <button id="room-mode-btn" class="big-btn sub">部屋作成／参加</button>
         </div>
         <div id="random-panel" class="online-box automatch-box hidden">
           <h3>ランダムマッチ</h3>
           <p class="desc">待っている対戦相手と自動でマッチします。最大100人で、人数の選択はありません（集まった人数に合わせてCPUが補います）。相手が見つからない場合はあなたが待機役になり、相手が来るか一定時間で自動で始まります。</p>
-          <button id="automatch-btn" class="big-btn">🎯 ランダムマッチを開始</button>
+          <button id="automatch-btn" class="big-btn">ランダムマッチを開始</button>
           <p id="automatch-status" class="status"></p>
         </div>
         <div id="match-screen" class="online-box hidden" style="text-align:center">
-          <h3>🎯 マッチング中</h3>
+          <h3>マッチング中</h3>
           <p id="match-state" class="status">待機中…</p>
           <p style="font-size:20px">現在のプレイヤー数：<b id="match-count">1</b> 人</p>
           <p style="font-size:20px">強制スタートまで：<b id="match-countdown">90</b> 秒</p>
@@ -87,13 +87,13 @@
   <div id="timer-wrap"><div id="timer-bar"></div><span id="timer-text">10</span></div>
 
   <div id="stadium-wrap">
-    <div id="aurora-vision"><div class="vision-label">AURORA VISION</div><div id="vision-main">★ ULTRA QUIZ ★</div><div id="vision-sub">野球場中央上部・大型ビジョン</div></div>
+    <div id="aurora-vision"><div class="vision-label">AURORA VISION</div><div id="vision-main">ULTRA QUIZ</div><div id="vision-sub">野球場中央上部・大型ビジョン</div></div>
     <div id="stadium-3d"></div>
     <div id="stadium-fallback" class="hidden">
       <div class="zone zone-maru"><div class="zone-label">○ エリア</div><div class="zone-people" id="people-maru"></div></div>
       <div class="zone zone-batsu"><div class="zone-label">× エリア</div><div class="zone-people" id="people-batsu"></div></div>
     </div>
-    <div class="stadium-caption">⚾ 野球場フィールド：○はレフト側（青）／ ×はライト側（赤）。ボタンを押すとあなたの選手が走って移動します</div>
+    <div class="stadium-caption">野球場フィールド：○はレフト側（青）／ ×はライト側（赤）。ボタンを押すとあなたの選手が走って移動します</div>
   </div>
 
   <div class="question-card">
@@ -107,9 +107,13 @@
     <p class="choice-hint">← ○か×か、エリアを選べ！ →</p>
     <button id="btn-batsu" class="choice batsu">×<span>バツ</span></button>
   </div>
-  <button id="skip-btn" class="big-btn sub hidden" style="margin-top:10px">⏩ スキップ（解答提示へ）</button>
+  <button id="skip-btn" class="big-btn sub hidden" style="margin-top:10px">スキップ（解答提示へ）</button>
 
 
+  <div id="spectate-bar" class="hidden" style="text-align:center;margin:10px 0">
+    <p class="status" style="font-size:17px">脱落しました。観戦中です（残りの対戦が終わるまで自動で進みます）</p>
+    <button id="end-btn" class="big-btn sub">終了する</button>
+  </div>
   <div id="reveal-area" class="reveal-area hidden">
     <p id="reveal-result"></p>
     <p id="reveal-survivors"></p>
@@ -118,7 +122,7 @@
   </div>
 
   <div class="participants">
-    <div class="p-title">参加者（●生存 ／ ○脱落）あなたは ★、オンラインの相手は ◆</div>
+    <div class="p-title">参加者（あなたは Y、オンラインの相手は P、CPUは C、脱落は ×）</div>
     <div id="participants-grid"></div>
   </div>
 </section>
@@ -126,7 +130,7 @@
 <!-- RESULT -->
 <section id="screen-result" class="screen">
   <div class="result-card">
-    <div id="result-emoji" class="result-emoji">🏆</div>
+    
     <h2 id="result-title">優勝！アメリカ行き決定！</h2>
     <p id="result-detail"></p>
     <div id="result-stats" class="result-stats"></div>
@@ -149,6 +153,6 @@
 </section>
 
 <footer>アメリカ横断ウルトラクイズを模したファンメイドの○×クイズです（非公式）。</footer>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

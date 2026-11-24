@@ -100,7 +100,7 @@ const Stadium = {
     this.visionTex=new THREE.CanvasTexture(this.visionCanvas);
     const vision=new THREE.Mesh(new THREE.PlaneGeometry(29,11), new THREE.MeshBasicMaterial({map:this.visionTex}));
     vision.position.set(0,14.5,-33.3); this.scene.add(vision);
-    this.setVision("★ ULTRA QUIZ ★","オーロラビジョン","#111827","#facc15");
+    this.setVision("ULTRA QUIZ","オーロラビジョン","#111827","#facc15");
   },
   setVision(main,sub,bg,fg){
     const vm=$("#vision-main"), vs=$("#vision-sub");
@@ -161,7 +161,7 @@ const Stadium = {
   toStart(list){ if(!this.ok) return; this.count=list.length; list.forEach((p,i)=>{ if(p.alive) this.targets.set(p.pid,this.startPos(i)); }); },
   move(pid,zone){ if(!this.ok) return; this.targets.set(pid,this.zonePos(pid,zone)); if(!$("#stadium-fallback").classList.contains("hidden")){} 
     // フォールバック表示も更新
-    const el=zone===1?$("#people-maru"):$("#people-batsu"); if(el) el.textContent+="🧑";
+    const el=zone===1?$("#people-maru"):$("#people-batsu"); if(el) el.textContent+="●";
   },
   fall(pid){ if(!this.ok) return; this.falling.add(pid); const grp=this.people.get(pid); if(grp) grp.userData.fallStart=Date.now(); },
   tick(){
@@ -194,7 +194,7 @@ function renderParticipants(){
   participantsForView().forEach(p=>{
     const d=document.createElement("div");
     d.className="person"+(p.you?" you":"")+(p.kind==="remote"?" remote":"")+(!p.alive?" dead":"");
-    d.textContent=p.you?"★":(p.kind==="remote"?"◆":(p.alive?"🧑":"✕"));
+    d.textContent=p.you?"Y":(p.kind==="remote"?"P":(p.alive?"C":"×"));
     d.title=p.name+(p.alive?"（生存）":"（脱落）");
     grid.appendChild(d);
   });
@@ -229,8 +229,11 @@ function showQuestion(idx,total,q){
   const vm0=$("#vision-main"); if(vm0) vm0.style.fontSize="";
   Stadium.setVision("第 "+(idx+1)+" 問","シンキングタイム "+THINK_SECONDS+"秒","#111827","#ffffff");
   // スキップボタンは参加者が自分1人のときだけ表示
-  const solo = game && game.participants.length===1;
+  const solo = game && game.participants.length===1 && !game.spectating;
   $("#skip-btn").classList.toggle("hidden", !solo);
+  const spec = !!(game && game.spectating);
+  $("#btn-maru").disabled=spec; $("#btn-batsu").disabled=spec;
+  if(spec) $("#wait-text").textContent="観戦中です";
   $("#q-num").textContent=idx+1; $("#q-total").textContent=total; $("#question-text").textContent=q;
   $("#choice-area").classList.remove("hidden"); $("#reveal-area").classList.add("hidden");
   $("#btn-maru").classList.remove("selected"); $("#btn-batsu").classList.remove("selected");
@@ -248,6 +251,7 @@ function startLocalGame(){
   beginGameScreen();
 }
 function beginGameScreen(){
+  $("#spectate-bar").classList.add("hidden"); $("#btn-maru").disabled=false; $("#btn-batsu").disabled=false;
   setHud(myName(), true); goto("game"); Stadium.init(); renderParticipants(); hostNextQuestion();
 }
 function hostNextQuestion(){
@@ -281,7 +285,7 @@ function hostNextQuestion(){
     }
   },200);
   startTimer(THINK_SECONDS, ()=>{ // シンキングタイム終了
-    if(game.myPick===null) recordPick("you", Math.random()<0.5?1:2, true);
+    if(game.myPick===null&&!game.spectating) recordPick("you", Math.random()<0.5?1:2, true);
     finalizePicks("timeout");
   });
 }
@@ -335,7 +339,7 @@ function applyReveal(){
   clearInterval(game.movePoll);
   $("#skip-btn").classList.add("hidden");
   revealOnVision(cur.a);
-  $("#reveal-result").innerHTML=youCorrect?"🎉 <b>正解！勝ち残りです！</b>（オーロラビジョンで解答提示中）":"💥 <b>残念…不正解。ここで脱落です。</b>（オーロラビジョンで解答提示中）";
+  $("#reveal-result").innerHTML=youCorrect?"<b>正解。勝ち残りです。</b>":"<b>不正解。ここで脱落です。</b>";
   const alive=game.participants.filter(p=>p.alive);
   $("#reveal-survivors").textContent="この問題で "+deadNames.length+" 人が脱落。勝ち残りは "+alive.length+" 人です。";
   $("#choice-area").classList.add("hidden"); $("#reveal-area").classList.remove("hidden");
@@ -344,8 +348,16 @@ function applyReveal(){
   // 自動遷移：一定時間の解答提示のあと、次問または結果へ自動で進む
   clearTimeout(revealTimer);
   revealTimer=setTimeout(()=>{
-    if(!you.alive) return hostFinish(false);
-    if(game.mode!=="solo"&&alive.length===1) return hostFinish(true,"最後の1人まで勝ち残り！");
+    if(!you.alive){
+      if(game.mode==="solo") return hostFinish(false); // 1人だけなら観戦対象がない
+      // 脱落したらデフォルトで観戦に回り、残りの対戦を見守る
+      game.spectating=true;
+      $("#spectate-bar").classList.remove("hidden");
+      if(alive.length<=1) return hostFinish(false,"勝ち残りが決まりました");
+      game.idx++; hostNextQuestion();
+      return;
+    }
+    if(game.mode!=="solo"&&alive.length===1) return hostFinish(true,"最後の1人まで勝ち残り");
     game.idx++; hostNextQuestion();
   }, REVEAL_MS);
 }
@@ -360,11 +372,15 @@ function onChoice(choice){
     $("#wait-text").textContent="回答を送りました。正解発表を待っています…";
     return;
   }
-  if(!game||game.myPick!==null||game.resolving||game.finalized) return;
+  if(!game||game.spectating||game.myPick!==null||game.resolving||game.finalized) return;
   recordPick("you", choice);
   if(game.mode==="online") netBroadcast({t:"picks", picks:{you:choice}});
   // 提示は「全員の移動完了」または「シンキングタイム終了」まで自動では進まない
 }
+$("#end-btn").addEventListener("click",()=>{
+  if(game){ hostFinish(false,"観戦を終了しました"); return; }
+  if(guest){ try{ net.peer&&net.peer.destroy(); }catch(e){} guest=null; $("#spectate-bar").classList.add("hidden"); goto("top"); }
+});
 // 遷移は自動で行うため、手動の「次の問題へ」ボタンは使わない
 $("#skip-btn").addEventListener("click",()=>{
   if(!game||game.participants.length!==1||game.finalized) return; // 自分1人の場合に限る
@@ -373,8 +389,9 @@ $("#skip-btn").addEventListener("click",()=>{
 });
 function hostFinish(won, reason=""){
   stopTimer(); clearTimeout(revealTimer); clearInterval(game.thinkPoll); (game.cpuTimers||[]).forEach(clearTimeout); clearInterval(game.movePoll);
+  $("#spectate-bar").classList.add("hidden");
 
-  Stadium.setVision(won?"🏆 優勝！":"ゲーム終了", won?"アメリカ行き決定！":"また挑戦してください","#111827","#facc15");
+  Stadium.setVision(won?"優勝":"ゲーム終了", won?"アメリカ行き決定！":"また挑戦してください","#111827","#facc15");
   const you=game.participants[0];
   showResult(won, reason, you.name, game.survived, game.idx+1, game.participants.filter(p=>p.alive).length, game.mode);
   netBroadcast({t:"result", wonMap:Object.fromEntries(game.participants.map(p=>[p.pid, p.alive&&won])), reason,
@@ -382,7 +399,6 @@ function hostFinish(won, reason=""){
   net.started=false;
 }
 function showResult(won, reason, name, survived, played, aliveCount, mode){
-  $("#result-emoji").textContent=won?"🗽🏆":"😢";
   $("#result-title").textContent=won?"優勝！アメリカ行き決定！":"脱落…";
   $("#result-detail").textContent=won?(reason+" おめでとうございます、"+name+"さん！最後まで勝ち残りました。"):("お疲れさまでした、"+name+"さん。またニューヨークで会いましょう！");
   $("#result-stats").innerHTML="<div>勝ち残った問題<br>"+survived+" 問</div><div>挑戦した問題<br>"+played+" 問</div><div>残り勝ち残り<br>"+aliveCount+" 人</div><div>モード<br>"+(mode==="online"?"オンライン":mode==="tournament"?"大会（50人）":"1人")+"</div>";
@@ -516,7 +532,7 @@ function becomeMatchHost(slotPeer){
   net.matchmaking=true;
   becomeHost(slotPeer, ()=>{
     $("#automatch-status").textContent="自動マッチ待機中… 相手が来るのを待っています。90秒たつとCPUを補って自動で開始します。";
-    net.matchDeadline=Date.now()+90000; // 強制スタートまでのカウントダウン（90秒）
+    net.matchDeadline=net.matchDeadline||Date.now()+90000; // 強制スタートまでのカウントダウン（90秒）
     showMatchScreen("対戦相手を待っています…");
     startMatchUi(); broadcastLobby();
     clearTimeout(matchWaitTimeout);
@@ -547,7 +563,7 @@ function tryJoinSlot(slotId, done){
 $("#automatch-btn").addEventListener("click", async ()=>{
   if(!peerAvailable()){ alert("オンライン機能の読み込みに失敗しました。再読み込みしてください。"); return; }
   $("#automatch-status").textContent="マッチング中… 待機枠を探しています。";
-  net.matchDeadline=null; showMatchScreen("待機枠を探しています…"); startMatchUi();
+  net.matchDeadline=Date.now()+90000; showMatchScreen("待機枠を探しています…"); startMatchUi();
   for(const slotId of MATCH_SLOTS){
     // まず待機枠の確保を試す（空いていれば自分が待機ホスト）
     const claimed=await new Promise(res=>{
@@ -596,7 +612,7 @@ function onGuestMessage(msg){
   if(msg.t==="lobby"&&guest){ $("#guest-status").textContent="ロビー参加中："+msg.players.length+"人。開始をお待ちください。";
     if(msg.match){ guest.matchCount=msg.match.count; guest.matchRemain=msg.match.remain; net.matchDeadline=Date.now()+(msg.match.remain||0)*1000; showMatchScreen("マッチしました！ 開始を待っています"); updateMatchScreen(msg.match.count); if(!matchUiTimer) startMatchUi(); } }
   if(msg.t==="start"){
-    hideMatchScreen();
+    hideMatchScreen(); $("#spectate-bar").classList.add("hidden"); $("#btn-maru").disabled=false; $("#btn-batsu").disabled=false;
     guest.participants=msg.players.map(p=>({...p, you:p.pid===guest.myPid, kind:p.pid===guest.myPid?"you":(p.kind==="cpu"?"cpu":"remote")}));
     guest.myPick=null; guest.alive=true;
     setHud(myName(),true); goto("game"); Stadium.init(); renderParticipants();
@@ -610,14 +626,15 @@ function onGuestMessage(msg){
     Object.entries(msg.picks||{}).forEach(([pid,ch])=>Stadium.move(pid,ch));
     const mine=msg.picks&&msg.picks[guest.myPid]; const correct=mine===msg.answer;
     if(guest.participants.find(p=>p.pid===guest.myPid)) guest.alive=guest.participants.find(p=>p.pid===guest.myPid).alive;
+    if(!guest.alive){ $("#spectate-bar").classList.remove("hidden"); $("#btn-maru").disabled=true; $("#btn-batsu").disabled=true; }
     revealOnVision(msg.answer);
-    $("#reveal-result").innerHTML=correct?"🎉 <b>正解！勝ち残りです！</b>（オーロラビジョンで解答提示中）":"💥 <b>残念…不正解。ここで脱落です。</b>（オーロラビジョンで解答提示中）";
+    $("#reveal-result").innerHTML=correct?"<b>正解。勝ち残りです。</b>":"<b>不正解。ここで脱落です。</b>";
     $("#reveal-survivors").textContent=msg.survivedNote||"";
     $("#choice-area").classList.add("hidden"); $("#reveal-area").classList.remove("hidden"); $("#next-btn").style.display="none";
     setHud(myName(), guest.alive); renderParticipants();
   }
   if(msg.t==="result"&&guest){
-  
+    $("#spectate-bar").classList.add("hidden");
     const won=msg.wonMap?!!msg.wonMap[guest.myPid]:false;
     showResult(won, msg.reason||"", myName(), msg.stats?msg.stats.survived:0, msg.stats?msg.stats.played:0, msg.stats?msg.stats.alive:0, "online");
     $("#next-btn").style.display="";

@@ -224,23 +224,39 @@ function flashFrame(color){
   el.classList.remove("red","blue"); void el.offsetWidth; el.classList.add(color);
   setTimeout(()=>el.classList.remove("red","blue"), 1600);
 }
-function showJudgeOverlay(correct){
-  const ov=$("#judge-overlay"), tx=$("#judge-text"); if(!ov||!tx) return;
-  tx.textContent=correct?"正解":"不正解"; tx.className=correct?"correct":"wrong"; tx.id="judge-text";
-  ov.classList.remove("hidden");
-  setTimeout(()=>ov.classList.add("hidden"), 1500);
+function markAnswerButtons(answer){
+  const maru=$("#btn-maru"), batsu=$("#btn-batsu"); if(!maru||!batsu) return;
+  const correctBtn = answer===1? maru : batsu;
+  const wrongBtn = answer===1? batsu : maru;
+  correctBtn.classList.add("correct-glow");
+  wrongBtn.classList.add("wrong-mono");
+}
+function clearAnswerButtons(){
+  ["#btn-maru","#btn-batsu"].forEach(sel=>{ const b=$(sel); if(b) b.classList.remove("correct-glow","wrong-mono"); });
 }
 // ズームインしてから、オーロラビジョンの中に記号1文字だけを出す（全画面表示はしない）
-// 点滅と中央オーバーレイは、ビジョンへの掲載と同時に出す（judge: true=正解 / false=不正解 / null=出さない）
+// 点滅とボタンの演出は、ビジョンへの掲載と同時に出す（judge: true=正解 / false=不正解 / null=点滅なし）
 function revealOnVision(answer, judge){
   Stadium.setVision("","", "#030712","#ffffff"); // ズーム中は無表示
   Stadium.focusVision();
   setTimeout(()=>{
     Stadium.setVision(answer===1?"○":"×", "", "#030712", answer===1?"#60a5fa":"#f87171");
-    if(judge!==null&&judge!==undefined){ flashFrame(judge?"red":"blue"); showJudgeOverlay(judge); }
+    markAnswerButtons(answer);
+    if(judge!==null&&judge!==undefined) flashFrame(judge?"red":"blue");
   }, 1250);
 }
 function hideAnswerOverlay(){ Stadium.focusField(); }
+let typeTimer=null;
+function typeQuestion(text, done){
+  clearInterval(typeTimer);
+  const el=$("#question-text"); el.textContent="";
+  let i=0;
+  typeTimer=setInterval(()=>{
+    i++; el.textContent=text.slice(0,i);
+    if(i>=text.length){ clearInterval(typeTimer); typeTimer=null; done&&done(); }
+  }, 40);
+  if(!text.length){ clearInterval(typeTimer); done&&done(); }
+}
 function showQuestion(idx,total,q){
   hideAnswerOverlay();
   const ql=$("#q-label"); if(ql) ql.textContent="第 "+(idx+1)+" 問";
@@ -251,7 +267,8 @@ function showQuestion(idx,total,q){
   const spec = !!(game && game.spectating);
   $("#btn-maru").disabled=spec; $("#btn-batsu").disabled=spec;
   if(spec) $("#wait-text").textContent="観戦中です";
-  $("#q-num").textContent=idx+1; $("#q-total").textContent=total; $("#question-text").textContent=q;
+  clearAnswerButtons();
+  $("#q-num").textContent=idx+1; $("#q-total").textContent=total; $("#question-text").textContent="";
   $("#choice-area").classList.remove("hidden");
   $("#btn-maru").classList.remove("selected"); $("#btn-batsu").classList.remove("selected");
   $("#people-maru").textContent=""; $("#people-batsu").textContent=""; $("#wait-text").textContent="";
@@ -274,13 +291,34 @@ function beginGameScreen(){
 function hostNextQuestion(){
   if(game.idx>=game.questions.length) return hostFinish(true,"全問勝ち残り！");
   Stadium.shrinkDead(game.participants.filter(x=>!x.alive).map(x=>x.pid)); // 死骸は次問の開始時に縮んで消える
-  game.picks={}; game.myPick=null; game.resolving=false; game.finalized=false;
+  game.picks={}; game.myPick=null; game.resolving=false; game.finalized=false; game.phase="returning";
   (game.cpuTimers||[]).forEach(clearTimeout); game.cpuTimers=[];
   clearInterval(game.thinkPoll);
   const cur=game.questions[game.idx];
   const qidx=game.idx;
   showQuestion(game.idx, game.questions.length, cur.q);
-  netBroadcast({t:"question", idx:game.idx, total:game.questions.length, q:cur.q});
+  $("#btn-maru").disabled=true; $("#btn-batsu").disabled=true; // 戻り切るまでは押せない
+  // 1) 全員が初期位置に戻るのを待つ
+  const returnDeadline=Date.now()+4000;
+  const returnPoll=setInterval(()=>{
+    if(!game||game.idx!==qidx) { clearInterval(returnPoll); return; }
+    const alive=game.participants.filter(x=>x.alive);
+    if(Stadium.allArrived(alive.map(x=>x.pid)) || Date.now()>returnDeadline){
+      clearInterval(returnPoll);
+      // 2) 問題を1文字ずつ表示する
+      game.phase="typing";
+      netBroadcast({t:"question", idx:game.idx, total:game.questions.length, q:cur.q});
+      typeQuestion(cur.q, ()=>{
+        if(!game||game.idx!==qidx) return;
+        // 3) シンキングタイム開始
+        game.phase="thinking";
+        if(!game.spectating){ $("#btn-maru").disabled=false; $("#btn-batsu").disabled=false; }
+        startThinkingPhase(qidx, cur);
+      });
+    }
+  },150);
+}
+function startThinkingPhase(qidx, cur){
   // CPUはシンキングタイム中に思い思いのタイミングで回答し、その瞬間に移動する（早い者順）
   game.participants.forEach(part=>{
     if(!part.alive||part.kind!=="cpu") return;
@@ -342,7 +380,11 @@ function finalizePicks(reason){
   $("#wait-text").textContent="全員の移動を待っています…";
   const poll=setInterval(()=>{
     const alive=game.participants.filter(x=>x.alive);
-    if(Stadium.allArrived(alive.map(x=>x.pid)) || Date.now()>deadline){ clearInterval(poll); applyReveal(); }
+    if(Stadium.allArrived(alive.map(x=>x.pid)) || Date.now()>deadline){
+      clearInterval(poll);
+      $("#wait-text").textContent=""; // 溜め：正誤掲載の前に1.5秒置く
+      setTimeout(()=>{ if(game&&game.finalized) applyReveal(); }, 1500);
+    }
   },150);
   game.movePoll=poll;
 }
@@ -382,14 +424,14 @@ $("#btn-maru").addEventListener("click",()=>onChoice(1));
 $("#btn-batsu").addEventListener("click",()=>onChoice(2));
 function onChoice(choice){
   if(guest && !game){ // ゲスト側
-    if(guest.myPick!==null||!guest.alive) return;
+    if(guest.myPick!==null||!guest.alive||guest.phase!=="thinking") return;
     guest.myPick=choice; $("#btn-maru").classList.toggle("selected",choice===1); $("#btn-batsu").classList.toggle("selected",choice===2);
     Stadium.move(guest.myPid, choice);
     if(net.hostConn&&net.hostConn.open) net.hostConn.send({t:"answer", choice});
     $("#wait-text").textContent="回答を送りました。正解発表を待っています…";
     return;
   }
-  if(!game||game.spectating||game.myPick!==null||game.resolving||game.finalized) return;
+  if(!game||game.spectating||game.phase!=="thinking"||game.myPick!==null||game.resolving||game.finalized) return;
   recordPick("you", choice);
   if(game.mode==="online") netBroadcast({t:"picks", picks:{you:choice}});
   // 提示は「全員の移動完了」または「シンキングタイム終了」まで自動では進まない
@@ -400,7 +442,7 @@ $("#end-btn").addEventListener("click",()=>{
 });
 // 遷移は自動で行うため、手動の「次の問題へ」ボタンは使わない
 $("#skip-btn").addEventListener("click",()=>{
-  if(!game||game.participants.length!==1||game.finalized) return; // 自分1人の場合に限る
+  if(!game||game.participants.length!==1||game.finalized||game.phase!=="thinking") return; // 自分1人の場合に限る
   if(game.myPick===null) recordPick("you", Math.random()<0.5?1:2, true);
   finalizePicks("skip");
 });
@@ -634,7 +676,7 @@ function onGuestMessage(msg){
     guest.myPick=null; guest.alive=true;
     setHud(myName(),true); goto("game"); Stadium.init(); renderParticipants();
   }
-  if(msg.t==="question"&&guest){ guest.myPick=null; guest.idx=msg.idx; Stadium.shrinkDead(guest.participants.filter(x=>!x.alive).map(x=>x.pid)); showQuestion(msg.idx,msg.total,msg.q); startTimer(THINK_SECONDS,null); }
+  if(msg.t==="question"&&guest){ guest.myPick=null; guest.idx=msg.idx; guest.phase="typing"; Stadium.shrinkDead(guest.participants.filter(x=>!x.alive).map(x=>x.pid)); showQuestion(msg.idx,msg.total,msg.q); typeQuestion(msg.q, ()=>{ guest.phase="thinking"; startTimer(THINK_SECONDS,null); }); }
   if(msg.t==="picks"&&guest){ Object.entries(msg.picks||{}).forEach(([pid,ch])=>Stadium.move(pid,ch)); }
   if(msg.t==="reveal"&&guest){
     stopTimer();

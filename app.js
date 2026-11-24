@@ -5,7 +5,7 @@ let guest = null;       // ゲスト側の状態
 let timerId = null;
 let revealTimer = null;
 const THINK_SECONDS = 30;   // シンキングタイム
-const REVEAL_MS = 5000;     // 解答提示の表示時間（このあと自動で次問へ）
+const REVEAL_MS = 6500; // ズームイン約1.25秒＋記号表示     // 解答提示の表示時間（このあと自動で次問へ）
 let net = { peer:null, code:null, isHost:false, conns:new Map(), hostConn:null, nextPid:2, started:false };
 
 const $ = s => document.querySelector(s);
@@ -111,9 +111,10 @@ const Stadium = {
     g.fillStyle=bg||"#111827"; g.fillRect(0,0,1024,384);
     g.strokeStyle="#facc15"; g.lineWidth=10; g.strokeRect(10,10,1004,364);
     g.fillStyle=fg||"#ffffff"; g.textAlign="center"; g.textBaseline="middle";
-    g.font="bold 120px sans-serif";
+    const single=String(main).length===1;
+    g.font="bold "+(single?280:120)+"px sans-serif";
     const lines=String(main).split("\n");
-    lines.forEach((ln,i)=>g.fillText(ln,512,150+i*130-(lines.length-1)*65));
+    lines.forEach((ln,i)=>g.fillText(ln,512,(single?192:150)+i*130-(lines.length-1)*65));
     g.font="bold 44px sans-serif"; g.fillStyle="#facc15";
     if(sub) g.fillText(sub,512,330);
     if(this.visionTex) this.visionTex.needsUpdate=true;
@@ -132,10 +133,11 @@ const Stadium = {
       return Math.hypot(t.x-grp.position.x, t.z-grp.position.z) < 0.35;
     });
   },
-  startPos(i){ const col=i%10, rowi=Math.floor(i/10); return {x:(col-4.5)*2.4, z:13-rowi*2.6}; },
+  startPos(i){ const n=this.count||50; const cols=n<=60?10:(n<=240?16:30); const rows=Math.max(1,Math.ceil(n/cols)); const sx=Math.min(2.4,44/cols), sz=Math.min(2.6,44/rows); const col=i%cols, rowi=Math.floor(i/cols); return {x:(col-(cols-1)/2)*sx, z:13-rowi*sz}; },
   zonePos(pid,zone){ let h=0; const s=String(pid); for(const ch of s) h=(h*31+ch.charCodeAt(0))%997; const a=(h%360)*Math.PI/180, r=2+(h%55)/10; const cx=zone===1?-16:16; return {x:cx+Math.cos(a)*r, z:-7+Math.sin(a)*r*0.8}; },
   syncParticipants(list){
     if(!this.ok) return;
+    this.count=list.length;
     const seen=new Set();
     list.forEach((p,i)=>{
       seen.add(p.pid);
@@ -156,7 +158,7 @@ const Stadium = {
     });
     this.people.forEach((grp,pid)=>{ if(!seen.has(pid)){ this.scene.remove(grp); this.people.delete(pid); this.targets.delete(pid); } });
   },
-  toStart(list){ if(!this.ok) return; list.forEach((p,i)=>{ if(p.alive) this.targets.set(p.pid,this.startPos(i)); }); },
+  toStart(list){ if(!this.ok) return; this.count=list.length; list.forEach((p,i)=>{ if(p.alive) this.targets.set(p.pid,this.startPos(i)); }); },
   move(pid,zone){ if(!this.ok) return; this.targets.set(pid,this.zonePos(pid,zone)); if(!$("#stadium-fallback").classList.contains("hidden")){} 
     // フォールバック表示も更新
     const el=zone===1?$("#people-maru"):$("#people-batsu"); if(el) el.textContent+="🧑";
@@ -215,13 +217,23 @@ function showAnswerOverlay(answer){
   const ov=$("#answer-overlay"); if(!ov) return;
   const sym=$("#answer-symbol");
   sym.textContent=answer===1?"○":"×"; sym.className=answer===1?"maru":"batsu"; sym.id="answer-symbol";
-  $("#answer-caption").textContent="正解は "+(answer===1?"○":"×")+" ！";
   ov.classList.remove("hidden");
+}
+// ズームインしてから、オーロラビジョンに記号1文字だけを出す
+function revealOnVision(answer){
+  Stadium.setVision("","", "#030712","#ffffff"); // ズーム中は無表示
   Stadium.focusVision();
+  setTimeout(()=>{
+    Stadium.setVision(answer===1?"○":"×", "", "#030712", answer===1?"#60a5fa":"#f87171");
+    const vm=$("#vision-main"); if(vm){ vm.textContent=answer===1?"○":"×"; vm.style.fontSize="44px"; }
+    const vs=$("#vision-sub"); if(vs) vs.textContent="";
+    showAnswerOverlay(answer);
+  }, 1250);
 }
 function hideAnswerOverlay(){ const ov=$("#answer-overlay"); if(ov) ov.classList.add("hidden"); Stadium.focusField(); }
 function showQuestion(idx,total,q){
   hideAnswerOverlay();
+  const vm0=$("#vision-main"); if(vm0) vm0.style.fontSize="";
   Stadium.setVision("第 "+(idx+1)+" 問","シンキングタイム "+THINK_SECONDS+"秒","#111827","#ffffff");
   // スキップボタンは参加者が自分1人のときだけ表示
   const solo = game && game.participants.length===1;
@@ -237,11 +249,9 @@ function showQuestion(idx,total,q){
 function makeCpu(i){ return {pid:"cpu"+i, name:"CPU "+(i+1), kind:"cpu", alive:true, skill:0.55+Math.random()*0.32}; }
 function startLocalGame(){
   if(!allQuestions.length){ alert("問題データが読み込めていません。少し待ってからもう一度お試しください。"); return; }
-  const mode=$("#mode-select").value;
   const participants=[{pid:"you", name:myName(), kind:"you", you:true, alive:true}];
-  if(mode==="tournament") for(let i=0;i<49;i++) participants.push(makeCpu(i));
-  game={ mode, participants, questions: $("#order-select").value==="shuffle"?shuffle(allQuestions):[...allQuestions],
-         idx:0, survived:0, picks:{}, myPick:null, useTimer:$("#timer-check").checked, resolving:false };
+  game={ mode:"solo", participants, questions: shuffle(allQuestions),
+         idx:0, survived:0, picks:{}, myPick:null, useTimer:true, resolving:false };
   beginGameScreen();
 }
 function beginGameScreen(){
@@ -328,11 +338,10 @@ function applyReveal(){
   game.participants.forEach(p=>{ if(p.alive&&game.picks[p.pid]!==cur.a){ p.alive=false; Stadium.fall(p.pid); if(p.kind!=="you") deadNames.push(p.name); } });
   const youCorrect=game.picks["you"]===cur.a;
   if(youCorrect) game.survived++;
-  // 解答提示はオーロラビジョン（中央上部）で行う：カメラが俯瞰からビジョンのアップへ移り、記号を大々的に表示
+  // 解答提示：カメラが俯瞰からオーロラビジョンへズームインし、記号1文字だけを出す
   clearInterval(game.movePoll);
   $("#skip-btn").classList.add("hidden");
-  Stadium.setVision("正解は "+(cur.a===1?"○":"×")+" ！", youCorrect?"正解！勝ち残りです":"残念…", cur.a===1?"#1648a0":"#a01616", "#ffffff");
-  showAnswerOverlay(cur.a);
+  revealOnVision(cur.a);
   $("#reveal-result").innerHTML=youCorrect?"🎉 <b>正解！勝ち残りです！</b>（オーロラビジョンで解答提示中）":"💥 <b>残念…不正解。ここで脱落です。</b>（オーロラビジョンで解答提示中）";
   const alive=game.participants.filter(p=>p.alive);
   $("#reveal-survivors").textContent="この問題で "+deadNames.length+" 人が脱落。勝ち残りは "+alive.length+" 人です。";
@@ -387,13 +396,11 @@ function showResult(won, reason, name, survived, played, aliveCount, mode){
   goto("result");
 }
 
-// ---------- モード切替UI ----------
-$("#mode-select").addEventListener("change",e=>{
-  const online=e.target.value==="online";
-  $("#offline-options").classList.toggle("hidden",online);
-  $("#online-options").classList.toggle("hidden",!online);
-});
-$("#start-btn").addEventListener("click", startLocalGame);
+// ---------- モード選択ボタン ----------
+$("#single-btn").addEventListener("click", startLocalGame); // シングルは押したらすぐ開始
+$("#online-btn").addEventListener("click", ()=>{ $("#online-options").classList.toggle("hidden"); });
+$("#random-mode-btn").addEventListener("click", ()=>{ $("#random-panel").classList.remove("hidden"); $("#room-panel").classList.add("hidden"); });
+$("#room-mode-btn").addEventListener("click", ()=>{ $("#room-panel").classList.remove("hidden"); $("#random-panel").classList.add("hidden"); });
 
 // ---------- オンライン対戦（WebRTC / PeerJS Cloud は接続の取り次ぎのみ） ----------
 // 方針：このサイト自身は通信を中継・保存しない。ブラウザ同士が直接通信し、
@@ -458,19 +465,22 @@ function broadcastLobby(){
 }
 function netBroadcast(obj){ net.conns.forEach(c=>{ try{ c.open&&c.send(obj); }catch(e){} }); }
 
-function startOnlineGame(fillValue){
+function startOnlineGame(cpuCount){
   if(!allQuestions.length){ alert("問題データが読み込めていません。少し待ってからもう一度お試しください。"); return; }
   clearTimeout(matchCountdown); clearTimeout(matchWaitTimeout); matchCountdown=null;
   const participants=[{pid:"you", name:myName(), kind:"you", you:true, alive:true}];
   net.conns.forEach((conn,pid)=>participants.push({pid, name:conn._name||("ゲスト "+pid.slice(1)), kind:"remote", alive:true}));
-  const target=fillValue||20;
-  let ci=0; while(participants.length<target) participants.push(makeCpu(ci++)); // 人が足りない分はCPUで補う
+  let ci=0; const n=Math.max(0,Math.min(999, cpuCount|0)); while(ci<n) participants.push(makeCpu(ci++)); // 指定された数だけCPUを入れる
   game={ mode:"online", participants, questions:shuffle(allQuestions), idx:0, survived:0, picks:{}, myPick:null, useTimer:true, resolving:false };
   net.started=true;
   netBroadcast({t:"start", players:participants.map(p=>({pid:p.pid,name:p.name,kind:p.kind,alive:true})), total:game.questions.length});
   beginGameScreen();
 }
-$("#start-online-btn").addEventListener("click",()=>startOnlineGame(parseInt($("#fill-select").value,10)||20));
+$("#start-online-btn").addEventListener("click",()=>{
+  const useCpu=$("#room-cpu-check").checked;
+  const cnt=useCpu? Math.max(0, Math.min(999, parseInt($("#room-cpu-count").value,10)||0)) : 0;
+  startOnlineGame(cnt);
+});
 
 // ---------- 自動マッチング ----------
 // 待機枠（スロット）を先着で確保した人が待機ホストになり、後から来た人はその枠へ自動で参加する。
@@ -483,7 +493,7 @@ function scheduleMatchStart(){
   $("#automatch-status").textContent="対戦相手が見つかりました！ "+remain+" 秒後に自動で開始します（残りはCPUが補います）";
   matchCountdown=setInterval(()=>{
     remain--;
-    if(remain<=0){ clearInterval(matchCountdown); matchCountdown=null; startOnlineGame(parseInt($("#match-fill-select").value,10)||10); }
+    if(remain<=0){ clearInterval(matchCountdown); matchCountdown=null; startOnlineGame(Math.max(0, 100-(1+net.conns.size))); }
     else $("#automatch-status").textContent="対戦相手が見つかりました！ "+remain+" 秒後に自動で開始します（残りはCPUが補います）";
   },1000);
 }
@@ -492,7 +502,7 @@ function becomeMatchHost(slotPeer){
   becomeHost(slotPeer, ()=>{
     $("#automatch-status").textContent="自動マッチ待機中… 相手が来るのを待っています。90秒たつとCPUを補って自動で開始します。";
     clearTimeout(matchWaitTimeout);
-    matchWaitTimeout=setTimeout(()=>{ startOnlineGame(parseInt($("#match-fill-select").value,10)||10); }, 90000);
+    matchWaitTimeout=setTimeout(()=>{ startOnlineGame(Math.max(0, 100-(1+net.conns.size))); }, 90000);
   });
   // becomeHost内の汎用 countdown と競合しないよう、待機タイマーは matchCountdown に setTimeout として保持する
 }
@@ -578,8 +588,7 @@ function onGuestMessage(msg){
     Object.entries(msg.picks||{}).forEach(([pid,ch])=>Stadium.move(pid,ch));
     const mine=msg.picks&&msg.picks[guest.myPid]; const correct=mine===msg.answer;
     if(guest.participants.find(p=>p.pid===guest.myPid)) guest.alive=guest.participants.find(p=>p.pid===guest.myPid).alive;
-    Stadium.setVision("正解は "+(msg.answer===1?"○":"×")+" ！", correct?"正解！勝ち残りです":"残念…", msg.answer===1?"#1648a0":"#a01616", "#ffffff");
-    showAnswerOverlay(msg.answer);
+    revealOnVision(msg.answer);
     $("#reveal-result").innerHTML=correct?"🎉 <b>正解！勝ち残りです！</b>（オーロラビジョンで解答提示中）":"💥 <b>残念…不正解。ここで脱落です。</b>（オーロラビジョンで解答提示中）";
     $("#reveal-survivors").textContent=msg.survivedNote||"";
     $("#choice-area").classList.add("hidden"); $("#reveal-area").classList.remove("hidden"); $("#next-btn").style.display="none";

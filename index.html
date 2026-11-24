@@ -28,50 +28,31 @@
     <p class="hero-desc">知力・体力・時の運！<br>間違えたら即・脱落。最後まで勝ち残ってアメリカ行きを掴め！</p>
     <div class="setup-card">
       <label>あなたの名前（ニックネーム） <input id="player-name" type="text" value="挑戦者" maxlength="12"></label>
-      <label>モード
-        <select id="mode-select">
-          <option value="tournament" selected>大会モード（CPUと勝ち残り・全50人）</option>
-          <option value="solo">1人で勝ち残り（何問生き残れるか）</option>
-          <option value="online">オンライン対戦（部屋を作る／参加する）</option>
-        </select>
-      </label>
-      <div id="offline-options">
-        <label>問題の順番
-          <select id="order-select">
-            <option value="shuffle" selected>シャッフル</option>
-            <option value="sequential">決まった順番</option>
-          </select>
-        </label>
-        <label class="check"><input type="checkbox" id="timer-check" checked> シンキングタイム 30秒を使う</label>
-        <button id="start-btn" class="big-btn">✈️ ニューヨークへ出発！ クイズ開始</button>
+      <div class="mode-buttons">
+        <button id="single-btn" class="big-btn mode-btn">👤 シングル</button>
+        <button id="online-btn" class="big-btn mode-btn sub">🌐 オンライン</button>
       </div>
+      <p class="desc" style="text-align:center">シングルを押すと1人ですぐ始まります。オンラインではランダムマッチと部屋作成が選べます。</p>
       <div id="online-options" class="hidden">
-        <div class="online-box automatch-box">
-          <h3>自動マッチング</h3>
-          <p class="desc">待っている対戦相手と自動でマッチします。相手が見つからない場合はあなたが待機役になり、相手が来るか一定時間でCPUを補って自動で始まります。</p>
-          <label>参加者全体の人数（不足分はCPUが補います）
-            <select id="match-fill-select">
-              <option value="10" selected>10人</option>
-              <option value="20">20人</option>
-              <option value="50">50人</option>
-            </select>
-          </label>
-          <button id="automatch-btn" class="big-btn">🎯 自動マッチを開始</button>
+        <div class="mode-buttons">
+          <button id="random-mode-btn" class="big-btn sub">🎯 ランダムマッチ</button>
+          <button id="room-mode-btn" class="big-btn sub">🏠 部屋作成／参加</button>
+        </div>
+        <div id="random-panel" class="online-box automatch-box hidden">
+          <h3>ランダムマッチ</h3>
+          <p class="desc">待っている対戦相手と自動でマッチします。最大100人で、人数の選択はありません（集まった人数に合わせてCPUが補います）。相手が見つからない場合はあなたが待機役になり、相手が来るか一定時間で自動で始まります。</p>
+          <button id="automatch-btn" class="big-btn">🎯 ランダムマッチを開始</button>
           <p id="automatch-status" class="status"></p>
         </div>
+        <div id="room-panel" class="hidden">
         <div class="online-box">
           <h3>部屋を作る（ホスト）</h3>
-          <label>参加者全体の人数（不足分はCPUが補います）
-            <select id="fill-select">
-              <option value="10">10人</option>
-              <option value="20" selected>20人</option>
-              <option value="50">50人</option>
-            </select>
-          </label>
+          <label class="check"><input type="checkbox" id="room-cpu-check" checked> CPUを入れる</label>
+          <label>CPUの数（最大999体） <input id="room-cpu-count" type="number" value="9" min="0" max="999" step="1"></label>
           <button id="create-room-btn" class="big-btn">部屋を作る</button>
           <div id="host-lobby" class="lobby hidden">
             <p>部屋コード：<b id="room-code" class="room-code">----</b></p>
-            <p class="desc">このコードを相手に伝えてください。参加者がそろったら開始してください。1人だけでも開始できます（残りはCPUが補います）。</p>
+            <p class="desc">このコードを相手に伝えてください。参加者がそろったら開始してください。1人だけでも開始できます。</p>
             <p id="lobby-members">現在の参加者：あなた 1人</p>
             <button id="start-online-btn" class="big-btn">このメンバーで開始 ▶</button>
           </div>
@@ -81,6 +62,7 @@
           <label>部屋コード <input id="join-code" type="text" placeholder="例：AB12" maxlength="6" style="text-transform:uppercase"></label>
           <button id="join-room-btn" class="big-btn sub">部屋に参加する</button>
           <p id="guest-status" class="status"></p>
+        </div>
         </div>
         <p class="legal-note">オンライン対戦は、ブラウザ同士が直接つながる方式（WebRTC）で行います。このサイトは静的なページ配信のみで、対戦の内容を中継・保存するサーバーは置いていません。接続の取り次ぎには外部の公開シグナリングサービス（PeerJS Cloud）を使います。送られるのは○×の回答や勝敗などゲーム進行に必要なデータだけで、自由に入力できるチャット機能はありません。名前は本名でないニックネームを使ってください。</p>
       </div>
@@ -121,9 +103,7 @@
   <button id="skip-btn" class="big-btn sub hidden" style="margin-top:10px">⏩ スキップ（解答提示へ）</button>
 
   <div id="answer-overlay" class="hidden">
-    <div class="vision-label">AURORA VISION</div>
     <div id="answer-symbol">○</div>
-    <div id="answer-caption">正解は ○ ！</div>
   </div>
 
   <div id="reveal-area" class="reveal-area hidden">
@@ -157,8 +137,8 @@
     <li>問題が出たら、○ボタンか×ボタンを押します。あなたの選手が野球場のレフト側（○）／ライト側（×）へ走って移動します。</li>
     <li>正解発表で間違えた人はその場で倒れて脱落。勝ち残り人数が減っていきます。</li>
     <li>大会モードではCPUも同時に答えます。最後の1人になるか、全問勝ち残れば優勝です。</li>
-    <li>オンライン対戦は2通りあります。自動マッチングでは待っている相手と自動でつながり、部屋対戦ではホストの部屋コードで参加します。人数が足りない分はCPUが補います。</li>
-    <li>流れは自動です。出題のあとシンキングタイムは30秒。答えた人から順にリアルタイムで移動し、全員の移動が終わるかシンキングタイムが終わると、カメラがオーロラビジョンのアップに移って正解の○×が大きく表示され、そのあと自動で次の問題に進みます。参加者が自分1人のときだけスキップボタンが使えます。</li>
+    <li>「シングル」は1人ですぐ開始。「オンライン」ではランダムマッチ（最大100人、人数選択なし）と部屋作成が選べます。部屋作成ではCPUの有無と数（最大999体）をホストが選べます。</li>
+    <li>流れは自動です。出題のあとシンキングタイムは30秒。答えた人から順にリアルタイムで移動し、全員の移動が終わるかシンキングタイムが終わると、カメラがオーロラビジョンにズームインして、記号1文字だけ（ ○ か × ）が大きく表示され、そのあと自動で次の問題に進みます。参加者が自分1人のときだけスキップボタンが使えます。</li>
     <li>オンライン対戦はブラウザ同士の直接通信で行い、チャット機能はありません。送られるのはゲーム進行に必要なデータだけです。</li>
   </ol>
   <button class="big-btn" data-goto="title">トップへ戻る</button>

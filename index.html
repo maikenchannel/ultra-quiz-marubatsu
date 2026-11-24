@@ -42,10 +42,23 @@
             <option value="sequential">決まった順番</option>
           </select>
         </label>
-        <label class="check"><input type="checkbox" id="timer-check" checked> 制限時間 10秒を使う</label>
+        <label class="check"><input type="checkbox" id="timer-check" checked> シンキングタイム 30秒を使う</label>
         <button id="start-btn" class="big-btn">✈️ ニューヨークへ出発！ クイズ開始</button>
       </div>
       <div id="online-options" class="hidden">
+        <div class="online-box automatch-box">
+          <h3>自動マッチング</h3>
+          <p class="desc">待っている対戦相手と自動でマッチします。相手が見つからない場合はあなたが待機役になり、相手が来るか一定時間でCPUを補って自動で始まります。</p>
+          <label>参加者全体の人数（不足分はCPUが補います）
+            <select id="match-fill-select">
+              <option value="10" selected>10人</option>
+              <option value="20">20人</option>
+              <option value="50">50人</option>
+            </select>
+          </label>
+          <button id="automatch-btn" class="big-btn">🎯 自動マッチを開始</button>
+          <p id="automatch-status" class="status"></p>
+        </div>
         <div class="online-box">
           <h3>部屋を作る（ホスト）</h3>
           <label>参加者全体の人数（不足分はCPUが補います）
@@ -85,6 +98,7 @@
   <div id="timer-wrap"><div id="timer-bar"></div><span id="timer-text">10</span></div>
 
   <div id="stadium-wrap">
+    <div id="aurora-vision"><div class="vision-label">AURORA VISION</div><div id="vision-main">★ ULTRA QUIZ ★</div><div id="vision-sub">野球場中央上部・大型ビジョン</div></div>
     <div id="stadium-3d"></div>
     <div id="stadium-fallback" class="hidden">
       <div class="zone zone-maru"><div class="zone-label">○ エリア</div><div class="zone-people" id="people-maru"></div></div>
@@ -106,10 +120,10 @@
   </div>
 
   <div id="reveal-area" class="reveal-area hidden">
-    <div id="reveal-answer" class="reveal-answer">正解は ○ ！</div>
     <p id="reveal-result"></p>
     <p id="reveal-survivors"></p>
-    <button id="next-btn" class="big-btn">次の問題へ ▶</button>
+    <p class="status">まもなく自動で次の問題に進みます…</p>
+    <button id="next-btn" class="big-btn hidden">次の問題へ ▶</button>
   </div>
 
   <div class="participants">
@@ -136,7 +150,8 @@
     <li>問題が出たら、○ボタンか×ボタンを押します。あなたの選手が野球場のレフト側（○）／ライト側（×）へ走って移動します。</li>
     <li>正解発表で間違えた人はその場で倒れて脱落。勝ち残り人数が減っていきます。</li>
     <li>大会モードではCPUも同時に答えます。最後の1人になるか、全問勝ち残れば優勝です。</li>
-    <li>オンライン対戦では、ホストが部屋コードを伝え、ゲストがそのコードで参加します。人数が足りない分はCPUが補うので、1人でもそのまま開始できます。</li>
+    <li>オンライン対戦は2通りあります。自動マッチングでは待っている相手と自動でつながり、部屋対戦ではホストの部屋コードで参加します。人数が足りない分はCPUが補います。</li>
+    <li>流れは自動です。出題のあとシンキングタイムは30秒（全員が答え終わると早めに締め切ります）。正解は野球場中央上部のオーロラビジョンに表示され、そのあと自動で次の問題に進みます。</li>
     <li>オンライン対戦はブラウザ同士の直接通信で行い、チャット機能はありません。送られるのはゲーム進行に必要なデータだけです。</li>
   </ol>
   <button class="big-btn" data-goto="title">トップへ戻る</button>

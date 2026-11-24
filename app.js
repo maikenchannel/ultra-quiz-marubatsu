@@ -222,7 +222,7 @@ function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
 function flashFrame(color){
   const el=$("#flash-frame"); if(!el) return;
   el.classList.remove("red","blue"); void el.offsetWidth; el.classList.add(color);
-  setTimeout(()=>el.classList.remove("red","blue"), 2000);
+  setTimeout(()=>el.classList.remove("red","blue"), 2600);
 }
 function markAnswerButtons(answer){
   const maru=$("#btn-maru"), batsu=$("#btn-batsu"); if(!maru||!batsu) return;

@@ -56,7 +56,7 @@ const Stadium = {
       this.VISION_POS=new THREE.Vector3(0,14.5,-4); this.VISION_LOOK=new THREE.Vector3(0,14.5,-33.3);
       this.camera.position.copy(this.FIELD_POS);
       this.lookCur=this.FIELD_LOOK.clone(); this.camera.lookAt(this.lookCur);
-      this.camAnim=null;
+      this.camAnim=null; this.shrinking=new Map(); this.removedCorpses=new Set();
       this.renderer=new THREE.WebGLRenderer({antialias:true});
       this.renderer.setSize(W,H); this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));
       wrap.appendChild(this.renderer.domElement);
@@ -125,6 +125,10 @@ const Stadium = {
   },
   focusVision(){ this.animateCam(this.VISION_POS,this.VISION_LOOK,1300); },
   focusField(){ this.animateCam(this.FIELD_POS,this.FIELD_LOOK,1100); },
+  shrinkDead(pids){
+    if(!this.ok) return;
+    pids.forEach(pid=>{ if(this.people.has(pid)&&!this.shrinking.has(pid)) this.shrinking.set(pid, Date.now()); });
+  },
   allArrived(pids){
     if(!this.ok) return true;
     return pids.every(pid=>{
@@ -141,6 +145,7 @@ const Stadium = {
     const seen=new Set();
     list.forEach((p,i)=>{
       seen.add(p.pid);
+      if(this.removedCorpses&&this.removedCorpses.has(p.pid)){ if(p.alive) this.removedCorpses.delete(p.pid); else return; }
       if(!this.people.has(p.pid)){
         const grp=new THREE.Group();
         const colors=[0xef4444,0x3b82f6,0xf59e0b,0x10b981,0x8b5cf6,0xec4899,0xffffff,0x111827];
@@ -166,6 +171,14 @@ const Stadium = {
   fall(pid){ if(!this.ok) return; this.falling.add(pid); const grp=this.people.get(pid); if(grp) grp.userData.fallStart=Date.now(); },
   tick(){
     if(!this.ok) return; const now=Date.now();
+    if(this.shrinking&&this.shrinking.size){
+      this.shrinking.forEach((t0,pid)=>{
+        const grp=this.people.get(pid); if(!grp){ this.shrinking.delete(pid); return; }
+        const k=Math.min(1,(now-t0)/800); const sc=Math.max(0.001,1-k);
+        grp.scale.set(sc,sc,sc);
+        if(k>=1){ this.scene.remove(grp); this.people.delete(pid); this.targets.delete(pid); this.falling.delete(pid); this.shrinking.delete(pid); this.removedCorpses.add(pid); }
+      });
+    }
     if(this.camAnim){
       const k=Math.min(1,(now-this.camAnim.start)/this.camAnim.dur);
       const e=1-Math.pow(1-k,3); // easeOutCubic
@@ -211,12 +224,20 @@ function flashFrame(color){
   el.classList.remove("red","blue"); void el.offsetWidth; el.classList.add(color);
   setTimeout(()=>el.classList.remove("red","blue"), 1600);
 }
+function showJudgeOverlay(correct){
+  const ov=$("#judge-overlay"), tx=$("#judge-text"); if(!ov||!tx) return;
+  tx.textContent=correct?"正解":"不正解"; tx.className=correct?"correct":"wrong"; tx.id="judge-text";
+  ov.classList.remove("hidden");
+  setTimeout(()=>ov.classList.add("hidden"), 1500);
+}
 // ズームインしてから、オーロラビジョンの中に記号1文字だけを出す（全画面表示はしない）
-function revealOnVision(answer){
+// 点滅と中央オーバーレイは、ビジョンへの掲載と同時に出す（judge: true=正解 / false=不正解 / null=出さない）
+function revealOnVision(answer, judge){
   Stadium.setVision("","", "#030712","#ffffff"); // ズーム中は無表示
   Stadium.focusVision();
   setTimeout(()=>{
     Stadium.setVision(answer===1?"○":"×", "", "#030712", answer===1?"#60a5fa":"#f87171");
+    if(judge!==null&&judge!==undefined){ flashFrame(judge?"red":"blue"); showJudgeOverlay(judge); }
   }, 1250);
 }
 function hideAnswerOverlay(){ Stadium.focusField(); }
@@ -252,6 +273,7 @@ function beginGameScreen(){
 }
 function hostNextQuestion(){
   if(game.idx>=game.questions.length) return hostFinish(true,"全問勝ち残り！");
+  Stadium.shrinkDead(game.participants.filter(x=>!x.alive).map(x=>x.pid)); // 死骸は次問の開始時に縮んで消える
   game.picks={}; game.myPick=null; game.resolving=false; game.finalized=false;
   (game.cpuTimers||[]).forEach(clearTimeout); game.cpuTimers=[];
   clearInterval(game.thinkPoll);
@@ -335,9 +357,8 @@ function applyReveal(){
   // 解答提示：カメラが俯瞰からオーロラビジョンへズームインし、記号1文字だけを出す
   clearInterval(game.movePoll);
   $("#skip-btn").classList.add("hidden");
-  revealOnVision(cur.a);
+  revealOnVision(cur.a, youWasAlive? youCorrect : null);
   const alive=game.participants.filter(p=>p.alive);
-  if(youWasAlive) flashFrame(youCorrect?"red":"blue"); // 正解=赤、不正解=青に点滅
   $("#choice-area").classList.add("hidden");
   setHud(you.name, you.alive); renderParticipants();
   netBroadcast({t:"reveal", answer:cur.a, picks:game.picks, alive:game.participants.map(p=>({pid:p.pid,alive:p.alive})), youCorrectMap:Object.fromEntries(game.participants.filter(p=>p.kind==="remote").map(p=>[p.pid, game.picks[p.pid]===cur.a]))});
@@ -613,7 +634,7 @@ function onGuestMessage(msg){
     guest.myPick=null; guest.alive=true;
     setHud(myName(),true); goto("game"); Stadium.init(); renderParticipants();
   }
-  if(msg.t==="question"&&guest){ guest.myPick=null; guest.idx=msg.idx; showQuestion(msg.idx,msg.total,msg.q); startTimer(THINK_SECONDS,null); }
+  if(msg.t==="question"&&guest){ guest.myPick=null; guest.idx=msg.idx; Stadium.shrinkDead(guest.participants.filter(x=>!x.alive).map(x=>x.pid)); showQuestion(msg.idx,msg.total,msg.q); startTimer(THINK_SECONDS,null); }
   if(msg.t==="picks"&&guest){ Object.entries(msg.picks||{}).forEach(([pid,ch])=>Stadium.move(pid,ch)); }
   if(msg.t==="reveal"&&guest){
     stopTimer();
@@ -623,8 +644,7 @@ function onGuestMessage(msg){
     const mine=msg.picks&&msg.picks[guest.myPid]; const correct=mine===msg.answer;
     if(guest.participants.find(p=>p.pid===guest.myPid)) guest.alive=guest.participants.find(p=>p.pid===guest.myPid).alive;
     if(!guest.alive){ $("#spectate-bar").classList.remove("hidden"); $("#btn-maru").disabled=true; $("#btn-batsu").disabled=true; }
-    revealOnVision(msg.answer);
-    if(wasAliveGuest) flashFrame(correct?"red":"blue");
+    revealOnVision(msg.answer, wasAliveGuest? correct : null);
     $("#choice-area").classList.add("hidden");
     setHud(myName(), guest.alive); renderParticipants();
   }

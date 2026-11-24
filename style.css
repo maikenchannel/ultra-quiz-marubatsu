@@ -60,18 +60,26 @@ body{margin:0;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,s
 .result-emoji{font-size:72px}.result-card h2{font-size:32px;margin:10px 0}
 .result-stats{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:18px 0}
 .result-stats div{background:#eef4ff;border-radius:12px;padding:12px 18px;font-weight:800}
-#screen-editor,#screen-howto{background:#fff;border-radius:16px;margin-top:20px}
 .desc{line-height:1.8;color:#444}
-.editor-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
-.file-btn,.sub-btn{background:var(--navy);color:#fff;border:none;padding:11px 16px;border-radius:10px;font-weight:800;cursor:pointer}
 .sub-btn.danger{background:#a01616}
 .status{font-weight:700;color:#1648a0}
-.editor-row{display:grid;grid-template-columns:1fr 110px 44px;gap:8px;margin-bottom:8px}
-.editor-row textarea{padding:10px;border:2px solid #ccd;border-radius:10px;font-size:15px;min-height:44px}
-.editor-row select{padding:10px;border:2px solid #ccd;border-radius:10px;font-weight:800}
-.editor-row button{background:#fee2e2;border:none;border-radius:10px;cursor:pointer;font-size:16px}
 .howto{line-height:2;font-size:16px}
-.csv-sample{background:#0b1e4b;color:#a7f3d0;padding:16px;border-radius:12px;overflow:auto;line-height:1.7}
 code{background:#eef2ff;padding:2px 6px;border-radius:6px}
 footer{text-align:center;color:rgba(255,255,255,.85);padding:18px;font-size:12px}
 @media(max-width:640px){.choice{width:118px;height:118px;font-size:56px}.choice-hint{display:none}}
+
+/* --- stadium 3D / online (added) --- */
+#stadium-wrap{background:#14532d;border-radius:16px;padding:10px;margin-top:6px}
+#stadium-3d{width:100%;height:420px;border-radius:12px;overflow:hidden;background:#87ceeb}
+#stadium-3d canvas{display:block;width:100%;height:100%}
+#stadium-fallback{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stadium-caption{color:#dcfce7;font-size:12px;font-weight:700;text-align:center;padding-top:8px}
+.online-box{border:2px dashed #93c5fd;border-radius:12px;padding:14px;margin-top:12px}
+.online-box h3{margin:4px 0 10px}
+.room-code{font-size:28px;letter-spacing:.3em;color:#d92323}
+.lobby{background:#fff7ed;border-radius:10px;padding:12px;margin-top:10px}
+.legal-note{font-size:11px;color:#666;line-height:1.7}
+.big-btn.sub{background:#1648a0;box-shadow:0 5px 0 #0b2a5e}
+.status{font-weight:700;color:#1648a0}
+.person.remote{background:#fef3c7;border-color:#f59e0b}
+@media(max-width:640px){#stadium-3d{height:300px}}

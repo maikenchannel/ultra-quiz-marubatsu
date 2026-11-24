@@ -222,7 +222,7 @@ function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
 function flashFrame(color){
   const el=$("#flash-frame"); if(!el) return;
   el.classList.remove("red","blue"); void el.offsetWidth; el.classList.add(color);
-  setTimeout(()=>el.classList.remove("red","blue"), 1600);
+  setTimeout(()=>el.classList.remove("red","blue"), 2000);
 }
 function markAnswerButtons(answer){
   const maru=$("#btn-maru"), batsu=$("#btn-batsu"); if(!maru||!batsu) return;
@@ -401,7 +401,7 @@ function applyReveal(){
   $("#skip-btn").classList.add("hidden");
   revealOnVision(cur.a, youWasAlive? youCorrect : null);
   const alive=game.participants.filter(p=>p.alive);
-  $("#choice-area").classList.add("hidden");
+  $("#btn-maru").disabled=true; $("#btn-batsu").disabled=true; // 提示中は押せないが、ボタン自体は表示したまま演出を見せる
   setHud(you.name, you.alive); renderParticipants();
   netBroadcast({t:"reveal", answer:cur.a, picks:game.picks, alive:game.participants.map(p=>({pid:p.pid,alive:p.alive})), youCorrectMap:Object.fromEntries(game.participants.filter(p=>p.kind==="remote").map(p=>[p.pid, game.picks[p.pid]===cur.a]))});
   // 自動遷移：一定時間の解答提示のあと、次問または結果へ自動で進む
@@ -676,7 +676,7 @@ function onGuestMessage(msg){
     guest.myPick=null; guest.alive=true;
     setHud(myName(),true); goto("game"); Stadium.init(); renderParticipants();
   }
-  if(msg.t==="question"&&guest){ guest.myPick=null; guest.idx=msg.idx; guest.phase="typing"; Stadium.shrinkDead(guest.participants.filter(x=>!x.alive).map(x=>x.pid)); showQuestion(msg.idx,msg.total,msg.q); typeQuestion(msg.q, ()=>{ guest.phase="thinking"; startTimer(THINK_SECONDS,null); }); }
+  if(msg.t==="question"&&guest){ guest.myPick=null; guest.idx=msg.idx; guest.phase="typing"; Stadium.shrinkDead(guest.participants.filter(x=>!x.alive).map(x=>x.pid)); showQuestion(msg.idx,msg.total,msg.q); typeQuestion(msg.q, ()=>{ guest.phase="thinking"; if(guest.alive){ $("#btn-maru").disabled=false; $("#btn-batsu").disabled=false; } startTimer(THINK_SECONDS,null); }); }
   if(msg.t==="picks"&&guest){ Object.entries(msg.picks||{}).forEach(([pid,ch])=>Stadium.move(pid,ch)); }
   if(msg.t==="reveal"&&guest){
     stopTimer();
@@ -687,7 +687,7 @@ function onGuestMessage(msg){
     if(guest.participants.find(p=>p.pid===guest.myPid)) guest.alive=guest.participants.find(p=>p.pid===guest.myPid).alive;
     if(!guest.alive){ $("#spectate-bar").classList.remove("hidden"); $("#btn-maru").disabled=true; $("#btn-batsu").disabled=true; }
     revealOnVision(msg.answer, wasAliveGuest? correct : null);
-    $("#choice-area").classList.add("hidden");
+    $("#btn-maru").disabled=true; $("#btn-batsu").disabled=true;
     setHud(myName(), guest.alive); renderParticipants();
   }
   if(msg.t==="result"&&guest){

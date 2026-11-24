@@ -190,14 +190,6 @@ const Stadium = {
 // ---------- 共通ゲーム表示 ----------
 function participantsForView(){ return game ? game.participants : (guest ? guest.participants : []); }
 function renderParticipants(){
-  const grid=$("#participants-grid"); grid.innerHTML="";
-  participantsForView().forEach(p=>{
-    const d=document.createElement("div");
-    d.className="person"+(p.you?" you":"")+(p.kind==="remote"?" remote":"")+(!p.alive?" dead":"");
-    d.textContent=p.you?"Y":(p.kind==="remote"?"P":(p.alive?"C":"×"));
-    d.title=p.name+(p.alive?"（生存）":"（脱落）");
-    grid.appendChild(d);
-  });
   const alive=participantsForView().filter(p=>p.alive).length;
   $("#alive-count").textContent=alive;
   Stadium.syncParticipants(participantsForView());
@@ -213,20 +205,24 @@ function startTimer(seconds, onTimeout){
     if(left<=0){ stopTimer(); onTimeout&&onTimeout(); } },100);
 }
 function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
+// 正解時は赤、不正解時は青で、画面の周りを数回点滅させる
+function flashFrame(color){
+  const el=$("#flash-frame"); if(!el) return;
+  el.classList.remove("red","blue"); void el.offsetWidth; el.classList.add(color);
+  setTimeout(()=>el.classList.remove("red","blue"), 1600);
+}
 // ズームインしてから、オーロラビジョンの中に記号1文字だけを出す（全画面表示はしない）
 function revealOnVision(answer){
   Stadium.setVision("","", "#030712","#ffffff"); // ズーム中は無表示
   Stadium.focusVision();
   setTimeout(()=>{
     Stadium.setVision(answer===1?"○":"×", "", "#030712", answer===1?"#60a5fa":"#f87171");
-    const vm=$("#vision-main"); if(vm){ vm.textContent=answer===1?"○":"×"; vm.style.fontSize="44px"; }
-    const vs=$("#vision-sub"); if(vs) vs.textContent="";
   }, 1250);
 }
 function hideAnswerOverlay(){ Stadium.focusField(); }
 function showQuestion(idx,total,q){
   hideAnswerOverlay();
-  const vm0=$("#vision-main"); if(vm0) vm0.style.fontSize="";
+  const ql=$("#q-label"); if(ql) ql.textContent="第 "+(idx+1)+" 問";
   Stadium.setVision("第 "+(idx+1)+" 問","シンキングタイム "+THINK_SECONDS+"秒","#111827","#ffffff");
   // スキップボタンは参加者が自分1人のときだけ表示
   const solo = game && game.participants.length===1 && !game.spectating;
@@ -235,7 +231,7 @@ function showQuestion(idx,total,q){
   $("#btn-maru").disabled=spec; $("#btn-batsu").disabled=spec;
   if(spec) $("#wait-text").textContent="観戦中です";
   $("#q-num").textContent=idx+1; $("#q-total").textContent=total; $("#question-text").textContent=q;
-  $("#choice-area").classList.remove("hidden"); $("#reveal-area").classList.add("hidden");
+  $("#choice-area").classList.remove("hidden");
   $("#btn-maru").classList.remove("selected"); $("#btn-batsu").classList.remove("selected");
   $("#people-maru").textContent=""; $("#people-batsu").textContent=""; $("#wait-text").textContent="";
   Stadium.toStart(participantsForView());
@@ -331,6 +327,7 @@ function finalizePicks(reason){
 function applyReveal(){
   const cur=game.questions[game.idx];
   const you=game.participants[0];
+  const youWasAlive=you.alive;
   let deadNames=[];
   game.participants.forEach(p=>{ if(p.alive&&game.picks[p.pid]!==cur.a){ p.alive=false; Stadium.fall(p.pid); if(p.kind!=="you") deadNames.push(p.name); } });
   const youCorrect=game.picks["you"]===cur.a;
@@ -339,12 +336,11 @@ function applyReveal(){
   clearInterval(game.movePoll);
   $("#skip-btn").classList.add("hidden");
   revealOnVision(cur.a);
-  $("#reveal-result").innerHTML=youCorrect?"<b>正解。勝ち残りです。</b>":"<b>不正解。ここで脱落です。</b>";
   const alive=game.participants.filter(p=>p.alive);
-  $("#reveal-survivors").textContent="この問題で "+deadNames.length+" 人が脱落。勝ち残りは "+alive.length+" 人です。";
-  $("#choice-area").classList.add("hidden"); $("#reveal-area").classList.remove("hidden");
+  if(youWasAlive) flashFrame(youCorrect?"red":"blue"); // 正解=赤、不正解=青に点滅
+  $("#choice-area").classList.add("hidden");
   setHud(you.name, you.alive); renderParticipants();
-  netBroadcast({t:"reveal", answer:cur.a, picks:game.picks, alive:game.participants.map(p=>({pid:p.pid,alive:p.alive})), youCorrectMap:Object.fromEntries(game.participants.filter(p=>p.kind==="remote").map(p=>[p.pid, game.picks[p.pid]===cur.a])), survivedNote:$("#reveal-survivors").textContent});
+  netBroadcast({t:"reveal", answer:cur.a, picks:game.picks, alive:game.participants.map(p=>({pid:p.pid,alive:p.alive})), youCorrectMap:Object.fromEntries(game.participants.filter(p=>p.kind==="remote").map(p=>[p.pid, game.picks[p.pid]===cur.a]))});
   // 自動遷移：一定時間の解答提示のあと、次問または結果へ自動で進む
   clearTimeout(revealTimer);
   revealTimer=setTimeout(()=>{
@@ -616,28 +612,26 @@ function onGuestMessage(msg){
     guest.participants=msg.players.map(p=>({...p, you:p.pid===guest.myPid, kind:p.pid===guest.myPid?"you":(p.kind==="cpu"?"cpu":"remote")}));
     guest.myPick=null; guest.alive=true;
     setHud(myName(),true); goto("game"); Stadium.init(); renderParticipants();
-    $("#next-btn").style.display="none";
   }
   if(msg.t==="question"&&guest){ guest.myPick=null; guest.idx=msg.idx; showQuestion(msg.idx,msg.total,msg.q); startTimer(THINK_SECONDS,null); }
   if(msg.t==="picks"&&guest){ Object.entries(msg.picks||{}).forEach(([pid,ch])=>Stadium.move(pid,ch)); }
   if(msg.t==="reveal"&&guest){
     stopTimer();
+    const wasAliveGuest=guest.alive;
     (msg.alive||[]).forEach(a=>{ const p=guest.participants.find(x=>x.pid===a.pid); if(p){ if(p.alive&&!a.alive) Stadium.fall(a.pid); p.alive=a.alive; } });
     Object.entries(msg.picks||{}).forEach(([pid,ch])=>Stadium.move(pid,ch));
     const mine=msg.picks&&msg.picks[guest.myPid]; const correct=mine===msg.answer;
     if(guest.participants.find(p=>p.pid===guest.myPid)) guest.alive=guest.participants.find(p=>p.pid===guest.myPid).alive;
     if(!guest.alive){ $("#spectate-bar").classList.remove("hidden"); $("#btn-maru").disabled=true; $("#btn-batsu").disabled=true; }
     revealOnVision(msg.answer);
-    $("#reveal-result").innerHTML=correct?"<b>正解。勝ち残りです。</b>":"<b>不正解。ここで脱落です。</b>";
-    $("#reveal-survivors").textContent=msg.survivedNote||"";
-    $("#choice-area").classList.add("hidden"); $("#reveal-area").classList.remove("hidden"); $("#next-btn").style.display="none";
+    if(wasAliveGuest) flashFrame(correct?"red":"blue");
+    $("#choice-area").classList.add("hidden");
     setHud(myName(), guest.alive); renderParticipants();
   }
   if(msg.t==="result"&&guest){
     $("#spectate-bar").classList.add("hidden");
     const won=msg.wonMap?!!msg.wonMap[guest.myPid]:false;
     showResult(won, msg.reason||"", myName(), msg.stats?msg.stats.survived:0, msg.stats?msg.stats.played:0, msg.stats?msg.stats.alive:0, "online");
-    $("#next-btn").style.display="";
   }
 }
 loadQuestions();

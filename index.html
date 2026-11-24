@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>アメリカ横断ウルトラクイズ風 ○×勝ち残りクイズ</title>
 <meta name="description" content="○×勝ち残りクイズ。野球場風3Dフィールドで対戦。オンライン対戦対応。">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
@@ -87,7 +87,6 @@
   <div id="timer-wrap"><div id="timer-bar"></div><span id="timer-text">10</span></div>
 
   <div id="stadium-wrap">
-    <div id="aurora-vision"><div class="vision-label">AURORA VISION</div><div id="vision-main">ULTRA QUIZ</div><div id="vision-sub">野球場中央上部・大型ビジョン</div></div>
     <div id="stadium-3d"></div>
     <div id="stadium-fallback" class="hidden">
       <div class="zone zone-maru"><div class="zone-label">○ エリア</div><div class="zone-people" id="people-maru"></div></div>
@@ -97,7 +96,7 @@
   </div>
 
   <div class="question-card">
-    <div class="q-label">問題</div>
+    <div class="q-label" id="q-label">第 1 問</div>
     <p id="question-text">読み込み中…</p>
     <p id="wait-text" class="status"></p>
   </div>
@@ -108,22 +107,12 @@
     <button id="btn-batsu" class="choice batsu">×<span>バツ</span></button>
   </div>
   <button id="skip-btn" class="big-btn sub hidden" style="margin-top:10px">スキップ（解答提示へ）</button>
+  <div id="flash-frame"></div>
 
 
   <div id="spectate-bar" class="hidden" style="text-align:center;margin:10px 0">
     <p class="status" style="font-size:17px">脱落しました。観戦中です（残りの対戦が終わるまで自動で進みます）</p>
     <button id="end-btn" class="big-btn sub">終了する</button>
-  </div>
-  <div id="reveal-area" class="reveal-area hidden">
-    <p id="reveal-result"></p>
-    <p id="reveal-survivors"></p>
-    <p class="status">まもなく自動で次の問題に進みます…</p>
-    <button id="next-btn" class="big-btn hidden">次の問題へ ▶</button>
-  </div>
-
-  <div class="participants">
-    <div class="p-title">参加者（あなたは Y、オンラインの相手は P、CPUは C、脱落は ×）</div>
-    <div id="participants-grid"></div>
   </div>
 </section>
 
@@ -153,6 +142,6 @@
 </section>
 
 <footer>アメリカ横断ウルトラクイズを模したファンメイドの○×クイズです（非公式）。</footer>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
